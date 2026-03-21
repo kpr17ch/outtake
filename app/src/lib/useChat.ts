@@ -13,6 +13,93 @@ export function useChat({ activeSessionId, onClaudeSessionId }: UseChatOptions) 
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  const handleEvent = useCallback(
+    (msg: Record<string, unknown>, assistantId: string) => {
+      // Capture Claude session ID and save it back to the session
+      if (msg.type === "system" && msg.subtype === "init") {
+        const claudeSessionId = msg.session_id as string;
+        if (claudeSessionId && activeSessionId) {
+          onClaudeSessionId?.(claudeSessionId);
+        }
+        return;
+      }
+
+      // Assistant message — extract tool calls only (text comes from result)
+      if (msg.type === "assistant") {
+        const apiMsg = msg.message as Record<string, unknown>;
+        const content = apiMsg?.content as Array<Record<string, unknown>>;
+        if (!content) return;
+
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantId) return m;
+            const toolCalls = [...(m.toolCalls || [])];
+
+            for (const block of content) {
+              if (block.type === "tool_use") {
+                const existing = toolCalls.findIndex((t) => t.id === block.id);
+                const tc: ToolCall = {
+                  id: block.id as string,
+                  name: block.name as string,
+                  input: JSON.stringify(block.input, null, 2),
+                  state: "running",
+                };
+                if (existing >= 0) toolCalls[existing] = tc;
+                else toolCalls.push(tc);
+              }
+            }
+
+            return { ...m, toolCalls };
+          })
+        );
+        return;
+      }
+
+      // Tool result — mark tool as done
+      if (msg.type === "user" && msg.tool_use_result !== undefined) {
+        const result = msg.tool_use_result;
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantId) return m;
+            const toolCalls = (m.toolCalls || []).map((t) =>
+              t.state === "running"
+                ? {
+                    ...t,
+                    result:
+                      typeof result === "string"
+                        ? result
+                        : JSON.stringify(result, null, 2),
+                    state: "done" as const,
+                  }
+                : t
+            );
+            return { ...m, toolCalls };
+          })
+        );
+        return;
+      }
+
+      // Final result — set content all at once, stop thinking
+      if (msg.type === "result") {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== assistantId) return m;
+            const toolCalls = (m.toolCalls || []).map((t) =>
+              t.state === "running" ? { ...t, state: "done" as const } : t
+            );
+            return {
+              ...m,
+              content: (msg.result as string) || m.content || "",
+              toolCalls,
+              isThinking: false,
+            };
+          })
+        );
+      }
+    },
+    [activeSessionId, onClaudeSessionId]
+  );
+
   const send = useCallback(
     async (input: string) => {
       if (!input.trim() || isStreaming) return;
@@ -103,95 +190,7 @@ export function useChat({ activeSessionId, onClaudeSessionId }: UseChatOptions) 
         );
       }
     },
-    [isStreaming, activeSessionId]
-  );
-
-  const handleEvent = useCallback(
-    (msg: Record<string, unknown>, assistantId: string) => {
-      // Capture Claude session ID and save it back to the session
-      if (msg.type === "system" && msg.subtype === "init") {
-        const claudeSessionId = msg.session_id as string;
-        if (claudeSessionId && activeSessionId) {
-          onClaudeSessionId?.(claudeSessionId);
-        }
-        return;
-      }
-
-      // Assistant message — extract tool calls only (text comes from result)
-      if (msg.type === "assistant") {
-        const apiMsg = msg.message as Record<string, unknown>;
-        const content = apiMsg?.content as Array<Record<string, unknown>>;
-        if (!content) return;
-
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== assistantId) return m;
-            const toolCalls = [...(m.toolCalls || [])];
-
-            for (const block of content) {
-              if (block.type === "tool_use") {
-                const existing = toolCalls.findIndex((t) => t.id === block.id);
-                const tc: ToolCall = {
-                  id: block.id as string,
-                  name: block.name as string,
-                  input: JSON.stringify(block.input, null, 2),
-                  state: "running",
-                };
-                if (existing >= 0) toolCalls[existing] = tc;
-                else toolCalls.push(tc);
-              }
-            }
-
-            return { ...m, toolCalls };
-          })
-        );
-        return;
-      }
-
-      // Tool result — mark tool as done
-      if (msg.type === "user" && msg.tool_use_result !== undefined) {
-        const result = msg.tool_use_result;
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== assistantId) return m;
-            const toolCalls = (m.toolCalls || []).map((t) =>
-              t.state === "running"
-                ? {
-                    ...t,
-                    result:
-                      typeof result === "string"
-                        ? result
-                        : JSON.stringify(result, null, 2),
-                    state: "done" as const,
-                  }
-                : t
-            );
-            return { ...m, toolCalls };
-          })
-        );
-        return;
-      }
-
-      // Final result — set content all at once, stop thinking
-      if (msg.type === "result") {
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== assistantId) return m;
-            const toolCalls = (m.toolCalls || []).map((t) =>
-              t.state === "running" ? { ...t, state: "done" as const } : t
-            );
-            return {
-              ...m,
-              content: (msg.result as string) || m.content || "",
-              toolCalls,
-              isThinking: false,
-            };
-          })
-        );
-        return;
-      }
-    },
-    [activeSessionId, onClaudeSessionId]
+    [activeSessionId, handleEvent, isStreaming]
   );
 
   const stop = useCallback(() => {

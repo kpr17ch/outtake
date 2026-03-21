@@ -1,51 +1,34 @@
 import { readFile, stat } from "fs/promises";
-import { resolve, join, extname } from "path";
+import { join } from "path";
 import { type NextRequest } from "next/server";
+import { resolveWorkspaceContext } from "@/lib/workspace-context";
+import {
+  getMimeType,
+  resolveWorkspaceEntryPath,
+} from "@/lib/workspace-server";
 
 export const runtime = "nodejs";
 
-const RAW_DIR = resolve(process.cwd(), "../workspace/raw");
-
-const MIME_MAP: Record<string, string> = {
-  ".mp4": "video/mp4",
-  ".mov": "video/quicktime",
-  ".avi": "video/x-msvideo",
-  ".mkv": "video/x-matroska",
-  ".webm": "video/webm",
-  ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".aac": "audio/aac",
-  ".ogg": "audio/ogg",
-  ".flac": "audio/flac",
-  ".m4a": "audio/mp4",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".bmp": "image/bmp",
-  ".tiff": "image/tiff",
-  ".tif": "image/tiff",
-};
-
-function getMimeType(filename: string): string {
-  const ext = extname(filename).toLowerCase();
-  return MIME_MAP[ext] || "application/octet-stream";
-}
-
 export async function GET(request: NextRequest) {
   const name = request.nextUrl.searchParams.get("name");
+  const sessionId = request.nextUrl.searchParams.get("sessionId");
   if (!name) {
     return new Response("Missing name parameter", { status: 400 });
   }
 
-  // Prevent directory traversal
-  const safeName = name.replace(/[/\\]/g, "");
-  const filePath = join(RAW_DIR, safeName);
+  const workspace = await resolveWorkspaceContext(sessionId);
+  if (sessionId && !workspace) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
 
-  // Ensure path stays inside RAW_DIR
-  if (!filePath.startsWith(RAW_DIR)) {
+  const rawDir = resolveWorkspaceEntryPath(workspace!.workspacePath, "raw");
+  if (!rawDir) {
+    return Response.json({ error: "Invalid workspace path" }, { status: 500 });
+  }
+
+  const safeName = name.replace(/[/\\]/g, "");
+  const filePath = join(rawDir, safeName);
+  if (!resolveWorkspaceEntryPath(rawDir, safeName)) {
     return new Response("Invalid path", { status: 400 });
   }
 

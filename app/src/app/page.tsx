@@ -13,6 +13,20 @@ export default function Home() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const isFirstMessage = useRef(true);
 
+  const createSession = useCallback(async (title: string = "New Session") => {
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to create session: ${res.status}`);
+    }
+
+    return (await res.json()) as Session;
+  }, []);
+
   const handleClaudeSessionId = useCallback(
     async (claudeSessionId: string) => {
       if (!activeSessionId) return;
@@ -47,9 +61,13 @@ export default function Home() {
         const res = await fetch("/api/sessions");
         if (res.ok) {
           const data: Session[] = await res.json();
-          setSessions(data);
           if (data.length > 0) {
+            setSessions(data);
             setActiveSessionId(data[0].id);
+          } else {
+            const initialSession = await createSession();
+            setSessions([initialSession]);
+            setActiveSessionId(initialSession.id);
           }
         }
       } catch {
@@ -59,7 +77,7 @@ export default function Home() {
       }
     }
     loadSessions();
-  }, []);
+  }, [createSession]);
 
   // Track first message per session
   useEffect(() => {
@@ -68,21 +86,14 @@ export default function Home() {
 
   const handleNewSession = useCallback(async () => {
     try {
-      const res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "New Session" }),
-      });
-      if (res.ok) {
-        const newSession: Session = await res.json();
-        setSessions((prev) => [newSession, ...prev]);
-        setActiveSessionId(newSession.id);
-        reset();
-      }
+      const newSession = await createSession();
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSessionId(newSession.id);
+      reset();
     } catch {
       // ignore
     }
-  }, [reset]);
+  }, [createSession, reset]);
 
   const handleSelectSession = useCallback(
     (id: string) => {
@@ -98,23 +109,27 @@ export default function Home() {
       try {
         const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
         if (res.ok) {
-          setSessions((prev) => {
-            const remaining = prev.filter((s) => s.id !== id);
-            if (id === activeSessionId && remaining.length > 0) {
-              setActiveSessionId(remaining[0].id);
-              reset();
-            } else if (remaining.length === 0) {
-              setActiveSessionId(null);
-              reset();
-            }
-            return remaining;
-          });
+          const remaining = sessions.filter((s) => s.id !== id);
+
+          if (remaining.length === 0) {
+            const replacement = await createSession();
+            setSessions([replacement]);
+            setActiveSessionId(replacement.id);
+            reset();
+            return;
+          }
+
+          setSessions(remaining);
+          if (id === activeSessionId) {
+            setActiveSessionId(remaining[0].id);
+            reset();
+          }
         }
       } catch {
         // ignore
       }
     },
-    [activeSessionId, reset]
+    [activeSessionId, createSession, reset, sessions]
   );
 
   // Update session title from first message
@@ -156,12 +171,13 @@ export default function Home() {
         isLoading={isLoadingSessions}
       />
       <ChatPanel
+        activeSessionId={activeSessionId}
         messages={messages}
         isStreaming={isStreaming}
         onSend={handleSend}
         onStop={stop}
       />
-      <VideoPanel />
+      <VideoPanel activeSessionId={activeSessionId} />
     </div>
   );
 }

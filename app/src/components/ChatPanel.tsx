@@ -178,13 +178,20 @@ function Message({ message }: { message: ChatMessage }) {
 // --- Chat Panel ---
 
 interface ChatPanelProps {
+  activeSessionId: string | null;
   messages: ChatMessage[];
   isStreaming: boolean;
   onSend: (input: string) => void;
   onStop: () => void;
 }
 
-export default function ChatPanel({ messages, isStreaming, onSend, onStop }: ChatPanelProps) {
+export default function ChatPanel({
+  activeSessionId,
+  messages,
+  isStreaming,
+  onSend,
+  onStop,
+}: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -223,6 +230,7 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
 
       const droppedFiles = e.dataTransfer.files;
       if (!droppedFiles.length) return;
+      if (!activeSessionId) return;
 
       const formData = new FormData();
       const names: string[] = [];
@@ -230,6 +238,7 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
         formData.append("files", file);
         names.push(file.name);
       }
+      formData.append("sessionId", activeSessionId);
 
       try {
         const res = await fetch("/api/upload", {
@@ -256,7 +265,7 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
         console.error("[chat drop] upload error:", err);
       }
     },
-    [isStreaming, onSend]
+    [activeSessionId, isStreaming, onSend]
   );
 
   return (

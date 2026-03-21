@@ -60,14 +60,23 @@ function groupByDir(tree: FileEntry[]): GroupedFiles {
   return groups;
 }
 
-export function useWorkspace(pollInterval = 3000) {
+export function useWorkspace(activeSessionId: string | null, pollInterval = 3000) {
   const [tree, setTree] = useState<FileEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const prevOutputRef = useRef<string[]>([]);
 
   const fetchTree = useCallback(async () => {
+    if (!activeSessionId) {
+      setTree([]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch("/api/workspace/tree");
+      const params = new URLSearchParams();
+      params.set("sessionId", activeSessionId);
+
+      const res = await fetch(`/api/workspace/tree?${params.toString()}`);
       if (!res.ok) return;
       const data = await res.json();
       setTree(data.tree || []);
@@ -76,7 +85,13 @@ export function useWorkspace(pollInterval = 3000) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    setTree([]);
+    setIsLoading(true);
+    prevOutputRef.current = [];
+  }, [activeSessionId]);
 
   // Initial fetch
   useEffect(() => {
@@ -102,7 +117,7 @@ export function useWorkspace(pollInterval = 3000) {
   // Update previous output ref
   useEffect(() => {
     prevOutputRef.current = outputPaths;
-  });
+  }, [outputPaths]);
 
   return {
     tree,
