@@ -14,9 +14,9 @@ venv/
 *.mp3
 *.aac
 
-# Work directories
-raw/
-workspace/
-output/
-assets/
-transcripts/
+# Work directories (top-level only)
+/raw/
+/workspace/
+/output/
+/assets/
+/transcripts/
