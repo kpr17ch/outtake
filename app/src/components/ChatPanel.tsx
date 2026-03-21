@@ -186,6 +186,7 @@ interface ChatPanelProps {
 
 export default function ChatPanel({ messages, isStreaming, onSend, onStop }: ChatPanelProps) {
   const [input, setInput] = useState("");
+  const [isDragOver, setIsDragOver] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -200,8 +201,109 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
     setInput("");
   }, [input, isStreaming, onSend]);
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+
+      const droppedFiles = e.dataTransfer.files;
+      if (!droppedFiles.length) return;
+
+      const formData = new FormData();
+      const names: string[] = [];
+      for (const file of Array.from(droppedFiles)) {
+        formData.append("files", file);
+        names.push(file.name);
+      }
+
+      try {
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const uploaded = (data.files || [])
+            .filter((f: { error?: string }) => !f.error)
+            .map((f: { filename: string }) => f.filename);
+
+          if (uploaded.length > 0 && !isStreaming) {
+            const fileList = uploaded.join(", ");
+            const msg =
+              uploaded.length === 1
+                ? `I uploaded ${fileList} to the workspace`
+                : `I uploaded ${uploaded.length} files to the workspace: ${fileList}`;
+            onSend(msg);
+          }
+        }
+      } catch (err) {
+        console.error("[chat drop] upload error:", err);
+      }
+    },
+    [isStreaming, onSend]
+  );
+
   return (
-    <div className="flex flex-col h-full flex-1 min-w-0" style={{ background: "var(--bg-base)" }}>
+    <div
+      className="flex flex-col h-full flex-1 min-w-0 relative"
+      style={{ background: "var(--bg-base)" }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center"
+          style={{
+            background: "rgba(10, 10, 10, 0.85)",
+            border: "2px dashed var(--accent)",
+            borderRadius: 8,
+            margin: 4,
+          }}
+        >
+          <div className="text-center">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="mx-auto mb-2"
+              style={{ color: "var(--accent)" }}
+            >
+              <path
+                d="M12 16V4m0 0l-4 4m4-4l4 4M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <p className="text-sm font-medium" style={{ color: "var(--accent)" }}>
+              Drop to upload & notify agent
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
+              Files will be uploaded to workspace/raw/
+            </p>
+          </div>
+        </div>
+      )}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
         <div className="max-w-2xl mx-auto">
           {messages.length === 0 && (
