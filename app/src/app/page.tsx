@@ -59,6 +59,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fps, setFps] = useState(25);
 
   // ─── Markers ───
   const [markers, setMarkers] = useState<Marker>({ inTime: null, outTime: null });
@@ -144,11 +145,19 @@ export default function Home() {
           break;
         case "ArrowLeft":
           e.preventDefault();
-          handleSeek(Math.max(0, currentTime - (e.shiftKey ? 5 : 1 / 30)));
+          if (e.shiftKey) {
+            handleSeek(Math.max(0, currentTime - 1));
+          } else {
+            previewRef.current?.stepBackward();
+          }
           break;
         case "ArrowRight":
           e.preventDefault();
-          handleSeek(Math.min(duration, currentTime + (e.shiftKey ? 5 : 1 / 30)));
+          if (e.shiftKey) {
+            handleSeek(Math.min(duration, currentTime + 1));
+          } else {
+            previewRef.current?.stepForward();
+          }
           break;
         case "Escape":
           handleClearMarkers();
@@ -202,9 +211,11 @@ export default function Home() {
           <Preview
             ref={previewRef}
             src={activeMedia?.kind === "video" ? activeMedia.url : null}
+            fps={fps}
             onTimeUpdate={setCurrentTime}
             onDurationChange={setDuration}
             onPlayStateChange={setIsPlaying}
+            onFpsDetected={setFps}
           />
         </div>
       </div>
@@ -213,6 +224,7 @@ export default function Home() {
       <Timeline
         duration={duration}
         currentTime={currentTime}
+        fps={fps}
         isPlaying={isPlaying}
         markers={markers}
         tracks={tracks}

@@ -8,17 +8,21 @@ export interface PreviewHandle {
   play: () => void;
   pause: () => void;
   toggle: () => void;
+  stepForward: () => void;
+  stepBackward: () => void;
 }
 
 interface PreviewProps {
   src: string | null;
+  fps?: number;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   onPlayStateChange?: (playing: boolean) => void;
+  onFpsDetected?: (fps: number) => void;
 }
 
 const Preview = forwardRef<PreviewHandle, PreviewProps>(
-  ({ src, onTimeUpdate, onDurationChange, onPlayStateChange }, ref) => {
+  ({ src, fps = 25, onTimeUpdate, onDurationChange, onPlayStateChange, onFpsDetected }, ref) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     // Store callback in ref so event listeners always see latest
     const playStateRef = useRef(onPlayStateChange);
@@ -35,6 +39,17 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
         const v = videoRef.current;
         if (!v) return;
         v.paused ? v.play() : v.pause();
+      },
+      stepForward: () => {
+        const v = videoRef.current;
+        if (!v || !v.paused) return;
+        // Use exact frame duration for stepping
+        v.currentTime = Math.min(v.duration, v.currentTime + 1 / fps);
+      },
+      stepBackward: () => {
+        const v = videoRef.current;
+        if (!v || !v.paused) return;
+        v.currentTime = Math.max(0, v.currentTime - 1 / fps);
       },
     }));
 
