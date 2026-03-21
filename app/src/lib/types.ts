@@ -20,7 +20,8 @@ export interface ChatMessage {
 export interface Session {
   id: string;
   title: string;
-  timestamp: string;
-  active?: boolean;
+  createdAt: string;
+  updatedAt: string;
   claudeSessionId?: string;
+  workspacePath: string;
 }
