@@ -150,6 +150,68 @@ def extract_audio(input_file: str, output_file: str) -> dict:
     return {"output_file": str(out_path), "output_ref_id": _mk_output_ref_id(out_path)}
 
 
+def _mix_sfx_filter_graph(start_times_seconds: list[float], sfx_volume: float) -> str:
+    """Build filter_complex: main [0:a] + same SFX [1:a] at each timestamp (stereo)."""
+    if not start_times_seconds:
+        raise ValueError("start_times_seconds cannot be empty")
+    if sfx_volume < 0:
+        raise ValueError("sfx_volume must be >= 0")
+    n = len(start_times_seconds)
+    split_outputs = "".join(f"[s{i}]" for i in range(n))
+    parts: list[str] = [
+        f"[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,volume={sfx_volume},"
+        f"asplit={n}{split_outputs}"
+    ]
+    delayed: list[str] = []
+    for i, t in enumerate(start_times_seconds):
+        if t < 0:
+            raise ValueError("start times must be >= 0")
+        ms = int(round(float(t) * 1000))
+        label = f"d{i}"
+        delayed.append(label)
+        parts.append(f"[s{i}]adelay={ms}|{ms}[{label}]")
+    parts.append(
+        "[0:a]aformat=sample_fmts=fltp:channel_layouts=stereo[main]"
+    )
+    mix_in = "[main]" + "".join(f"[{x}]" for x in delayed)
+    parts.append(
+        f"{mix_in}amix=inputs={n + 1}:duration=first:dropout_transition=2:normalize=0[aout]"
+    )
+    return ";".join(parts)
+
+
+@mcp.tool
+def mix_sfx(
+    input_video: str,
+    sfx_file: str,
+    output_file: str,
+    start_times_seconds: list[float],
+    sfx_volume: float = 0.85,
+) -> dict:
+    """
+    Mix one short SFX file into the video's existing audio at given start times (seconds).
+    Video stream is copied (no re-encode); audio is re-encoded to AAC.
+    Requires input_video to have an audio stream.
+    """
+    in_path = _assert_workspace_path(input_video, must_exist=True)
+    sfx_path = _assert_workspace_path(sfx_file, must_exist=True)
+    out_path = _assert_workspace_path(output_file, must_exist=False)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    graph = _mix_sfx_filter_graph(start_times_seconds, sfx_volume)
+    _run([
+        "ffmpeg", "-y",
+        "-i", str(in_path),
+        "-i", str(sfx_path),
+        "-filter_complex", graph,
+        "-map", "0:v:0",
+        "-map", "[aout]",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        str(out_path),
+    ])
+    return {"output_file": str(out_path), "output_ref_id": _mk_output_ref_id(out_path)}
+
+
 @mcp.tool
 def add_subtitles(input_file: str, subtitle_file: str, output_file: str) -> dict:
     """Burn subtitles into video. Output is browser-compatible."""

@@ -315,6 +315,75 @@ Generate animated motion graphics overlays with liquid wave transitions, kinetic
 - The `--jobId` should be descriptive (e.g., `sparkasse-motion`)
 - After generating, show the user the preview and ask for feedback
 
+---
+
+## Skill: Sound Effects (ElevenLabs)
+
+Generate sound effects from text descriptions. Uses `ELEVENLABS_API_KEY` from `.env`.
+
+**Use when:** User asks for sound effects, SFX, whoosh, transition sounds, impacts, ambient audio.
+
+### Generate SFX (Python)
+
+```python
+from elevenlabs import ElevenLabs
+
+client = ElevenLabs()
+audio = client.text_to_sound_effects.convert(
+    text="Soft airy whoosh transition, clean stereo",
+    duration_seconds=1.5,
+    prompt_influence=0.7,
+)
+with open("workspace/assets/whoosh.mp3", "wb") as f:
+    for chunk in audio:
+        f.write(chunk)
+```
+
+### Mix SFX into video (MCP tool)
+
+```
+mix_sfx(input_video="output/edit.mp4", sfx_file="workspace/assets/whoosh.mp3",
+        output_file="output/edit_sfx.mp4", start_times_seconds=[2.5, 8.0], sfx_volume=0.85)
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | required | Description of the sound |
+| `duration_seconds` | number/null | null (auto) | 0.5–30s |
+| `prompt_influence` | number/null | 0.3 | 0–1: higher = more literal |
+| `loop` | boolean | false | Seamless loop for steady sounds |
+
+### Prompting: be specific
+
+**Weak:** "Rain" → **Strong:** "Steady moderate rain on a tin roof, close perspective, subtle drips"
+
+---
+
+## Skill: AI Video Generation (Wan 2.6 via Replicate)
+
+Generate AI video clips from text or still images. Requires `REPLICATE_API_TOKEN`.
+
+**Use when:** User asks to generate video, animate an image, or create AI B-Roll.
+
+### CLI helper
+
+```bash
+python skills/video-gen/scripts/generate_video.py \
+  --prompt "Slow dolly-in on rainy city street, neon reflections" \
+  --duration 10 --resolution 1080p --aspect-ratio 16:9 \
+  -o workspace/assets/generated.mp4
+```
+
+### T2V constraints
+
+Duration: 5, 10, or 15 seconds. Size: `1280*720`, `1920*1080`, `720*1280`, `1080*1920`.
+
+### Prompting formula
+
+Subject + Scene + Motion + Lighting + Lens + Style
+
 ## Respond in the same language the user writes in.
 
 ## File Conventions

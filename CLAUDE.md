@@ -22,9 +22,12 @@ You approach editing like a seasoned editor: you analyze material thoroughly bef
 | Transcode | `transcode` MCP | Re-encode with quality presets |
 | Extract audio | `extract_audio` MCP | Get audio track |
 | Burn subtitles | `add_subtitles` MCP | Hardcode SRT into video |
+| Mix sound effects | `mix_sfx` MCP | Layer SFX into video audio at specific timestamps |
 | Extract thumbnail | `extract_thumbnail` MCP | Single frame as image |
 | Animated subtitles | Remotion `SubtitleJobPreview` | Animated word-by-word captions |
 | Motion graphics | Remotion `OuttakeMotion` | Animated text, transitions, kinetic typography |
+| Generate sound effects | ElevenLabs SFX API | Create SFX from text descriptions |
+| Generate AI video | Replicate Wan 2.6 | Text-to-video or image-to-video generation |
 | Complex filters | Bash FFmpeg | Blur, PiP, overlays, loudnorm |
 
 ---
@@ -44,6 +47,7 @@ You have these MCP tools from the FFmpeg server. **Always use these for video op
 | `extract_thumbnail` | Extract single frame as image file | `input_file`, `output_file`, `time` (seconds) |
 | `check_frame` | Quick visual check of a frame (returns image) | `input_file`, `time` (seconds), `width` (default 480) |
 | `scan_scenes` | Detect scene changes with scores | `input_file`, `threshold` (0-1), `start`, `end` (seconds) |
+| `mix_sfx` | Mix SFX into video audio at timestamps | `input_video`, `sfx_file`, `output_file`, `start_times_seconds`, `sfx_volume` |
 | `cleanup_frames` | Clean up temporary frame files | (no params) |
 
 **All file paths must be absolute paths within your workspace.**
@@ -189,6 +193,171 @@ Registered in `src/Root.tsx` as `OuttakeMotion`.
 
 ---
 
+## Skill: Sound Effects (ElevenLabs)
+
+Generate sound effects from text descriptions using ElevenLabs. Uses `ELEVENLABS_API_KEY` from `.env`.
+
+**Use when:** User asks for sound effects, SFX, Whoosh, Übergangs-Sound, impact sounds, ambient audio, UI sounds, or any non-speech audio.
+
+### Quick start
+
+```python
+from elevenlabs import ElevenLabs
+
+client = ElevenLabs()  # reads ELEVENLABS_API_KEY from env
+
+audio = client.text_to_sound_effects.convert(
+    text="Soft airy whoosh transition, clean stereo, no reverb",
+    duration_seconds=1.5,
+    prompt_influence=0.7,
+)
+
+with open("workspace/assets/whoosh.mp3", "wb") as f:
+    for chunk in audio:
+        f.write(chunk)
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | required | Description of the desired sound |
+| `duration_seconds` | number / null | null (auto) | Duration 0.5–30s |
+| `prompt_influence` | number / null | 0.3 | 0–1: higher = more literal, lower = more variation |
+| `loop` | boolean | false | Seamless loop (only for steady sounds like ambience) |
+
+### Prompting guide
+
+Write **specific, layered** descriptions:
+- **Source/material**: "metal door", "glass clink", "leather creak"
+- **Scale/energy**: "small", "massive", "soft tap", "deafening"
+- **Space**: "dry close-mic", "large cathedral reverb", "open field"
+- **Time/motion**: "fades in slowly", "quick attack then long decay"
+- **Genre/context**: "horror sting", "trailer braam", "clean UI click"
+
+**Weak:** "Rain" → **Strong:** "Steady moderate rain on a tin roof, close perspective, subtle drips"
+
+### prompt_influence in practice
+
+- **0.2–0.4**: Explore variations, brainstorming
+- **0.5–0.7**: Balanced, good default
+- **0.8–1.0**: Lock onto literal text, use when wording is precise
+
+### Ready-to-use templates
+
+**Transition whoosh (tutorial/explainer):**
+```
+Chill educational video transition: soft warm airy whoosh, calm and friendly, like turning a page. Minimal, clean stereo, no music, no voice. Professional explainer vibe.
+```
+→ `duration_seconds: 1.2`, `prompt_influence: 0.68`
+
+**Quick UI swoosh:**
+```
+Quick swoosh for switching screens: fast, precise, airy, clean stereo, no reverb tail. Modern, neutral, professional.
+```
+→ `duration_seconds: 0.8`, `prompt_influence: 0.78`
+
+**Deep tension drop:**
+```
+Deep bass dive. Smooth downward motion, no impact. Sub bass falling slowly, like pressure sinking inward. No explosion, no EDM drop. Cinematic tension.
+```
+→ `duration_seconds: 5.0`, `prompt_influence: 0.82`
+
+**Epic crowd + whoosh:**
+```
+Gentle woosh into a soft boom, then fans cheering in a large stadium — crowd airy and ambient, washed in reverb. Boom warm, not explosive. No voice, no music.
+```
+→ `duration_seconds: 4.0`, `prompt_influence: 0.68`
+
+### Workflow: SFX in video
+
+1. Generate SFX with ElevenLabs (Python inline)
+2. Save to `workspace/assets/<name>.mp3`
+3. Mix into video with `mix_sfx` MCP tool:
+   ```
+   mix_sfx(input_video="output/edit.mp4", sfx_file="workspace/assets/whoosh.mp3", output_file="output/edit_sfx.mp4", start_times_seconds=[2.5, 8.0, 15.3], sfx_volume=0.85)
+   ```
+
+The `mix_sfx` tool layers the same SFX at multiple timestamps. Video is copied (no re-encode), audio is re-encoded to AAC.
+
+### Reference
+
+Full details, output formats, and more templates: `skills/sound-effects/references/installation.md`
+
+---
+
+## Skill: AI Video Generation (Wan 2.6 via Replicate)
+
+Generate AI videos from text prompts or still images using Wan 2.6 on Replicate.
+
+**Use when:** User asks to generate a video clip, animate an image, create B-Roll, or produce AI-generated footage. Requires `REPLICATE_API_TOKEN`.
+
+### Two modes
+
+| Mode | Model | When |
+|------|-------|------|
+| Text-to-video | `wan-video/wan-2.6-t2v` | Generate from a text prompt |
+| Image-to-video | `wan-video/wan-2.6-i2v` | Animate a still image |
+
+### CLI helper
+
+```bash
+# Text-to-video
+python skills/video-gen/scripts/generate_video.py \
+  --prompt "Slow dolly-in on rainy city street, neon reflections, cinematic" \
+  --duration 10 --resolution 1080p --aspect-ratio 16:9 \
+  -o workspace/assets/generated.mp4
+
+# Image-to-video
+python skills/video-gen/scripts/generate_video.py \
+  --prompt "Camera push-in, leaves drift in wind" \
+  --image workspace/assets/frame.jpg \
+  --duration 5 --resolution 1080p \
+  -o workspace/assets/animated.mp4
+
+# With audio sync
+python skills/video-gen/scripts/generate_video.py \
+  --prompt "..." --audio workspace/assets/voice.mp3 \
+  -o workspace/assets/dubbed.mp4
+```
+
+### T2V size constraints (strict)
+
+Duration: **5, 10, or 15** seconds only.
+
+| Aspect | 720p | 1080p |
+|--------|------|-------|
+| 16:9 | `1280*720` | `1920*1080` |
+| 9:16 | `720*1280` | `1080*1920` |
+
+### Prompting guide
+
+**Formula:** Subject + Scene + Motion + Lighting + Lens + Style
+
+**Multi-shot (use time brackets):**
+```
+Cinematic, photoreal, shallow depth of field.
+Shot 1 [0-3s] Wide establishing: empty warehouse, single overhead light, slow pan right.
+Shot 2 [3-7s] Tracking shot: woman in red coat walking between pillars.
+Shot 3 [7-10s] Close-up on her eyes as she stops; subtle handheld movement.
+```
+
+**Camera verbs:** push in, pull out, pan, tilt, orbit, track, follow, dolly zoom, crane, handheld, FPV
+
+**`enable_prompt_expansion: true`** (default) — short prompts get enhanced. Set to **false** for pixel-precise control.
+
+**Negative prompts:** Keep short — `blurry, distorted faces, extra fingers, watermark, jitter`
+
+### Auth
+
+Set `REPLICATE_API_TOKEN` in environment or in `skills/video-gen/.env`.
+
+### Reference
+
+Full parameter tables and extended prompting dictionary: `skills/video-gen/references/model-reference.md`
+
+---
+
 ## Editing Workflow
 
 ### Step 1: Analyze (ALWAYS first)
@@ -272,7 +441,9 @@ Create a structured plan before executing. Save to `plans/`:
 
 ## Prerequisites
 
-- `ELEVENLABS_API_KEY` must be set in `.env` for transcription/subtitle/motion skills
+- `ELEVENLABS_API_KEY` in `.env` — for transcription, subtitles, motion graphics, and sound effects
+- `REPLICATE_API_TOKEN` in `skills/video-gen/.env` — for AI video generation
+- `pip install replicate elevenlabs` — Python dependencies for generation skills
 - All Remotion dependencies are in root `package.json`
 - Run `npm install` if `node_modules/` is missing
 
@@ -283,7 +454,7 @@ workspace/
   raw/           <- Source files (never modify)
   workspace/     <- Working copies, intermediate results
   output/        <- Final rendered videos
-  assets/        <- Generated assets (SFX, music, B-Roll)
+  assets/        <- Generated assets (SFX, music, B-Roll, AI video clips)
   transcripts/   <- Transcriptions
   plans/         <- Cut plans as JSON
 public/
@@ -296,4 +467,9 @@ src/
   OuttakeMotion.tsx    <- Motion graphics Remotion component
   Root.tsx             <- Remotion composition registry
   index.ts             <- Remotion entry point
+skills/
+  video-gen/     <- Wan 2.6 video generation (scripts, references)
+  sound-effects/ <- ElevenLabs SFX (references, templates)
+services/
+  ffmpeg_mcp/    <- MCP server (probe, cut, concat, transcode, mix_sfx, etc.)
 ```
