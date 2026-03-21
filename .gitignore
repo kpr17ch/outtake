@@ -20,7 +20,10 @@ workspace/
 output/
 assets/
 transcripts/
+input/
 /sessions/
+/public/jobs/
+/out/
 
 # Persistence
 *.outtake

@@ -5,26 +5,11 @@
       "Bash(ffprobe*)",
       "Bash(python*)",
       "Bash(node*)",
+      "Bash(npx*)",
       "Bash(mkdir*)",
       "Bash(cp*)",
-      "Bash(ls*)"
+      "Bash(ls*)",
+      "Bash(cat*)"
     ]
-  },
-  "mcpServers": {
-    "ffmpeg": {
-      "command": "node",
-      "args": ["mcp-servers/ffmpeg-server/index.js"],
-      "cwd": "/Users/kai.perich/projects/outtake"
-    },
-    "whisperx": {
-      "command": "python",
-      "args": ["mcp-servers/whisperx-server/server.py"],
-      "cwd": "/Users/kai.perich/projects/outtake"
-    },
-    "media-gen": {
-      "command": "python",
-      "args": ["mcp-servers/media-gen-server/server.py"],
-      "cwd": "/Users/kai.perich/projects/outtake"
-    }
   }
 }
