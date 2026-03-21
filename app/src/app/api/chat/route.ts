@@ -7,9 +7,11 @@ export const maxDuration = 300;
 
 interface EditorContext {
   activeVideo?: string;
+  activeVideoPath?: string; // relative path like "raw/video.mp4" or "output/cut.mp4"
   selection?: { inSeconds: number; outSeconds: number };
   duration?: number;
   fps?: number;
+  referencedFiles?: string[]; // files mentioned via @ in chat
 }
 
 export async function POST(req: Request) {
@@ -50,15 +52,28 @@ export async function POST(req: Request) {
 
       // Add editor context so agent knows what user is looking at
       if (ctx?.activeVideo) {
+        const videoPath = ctx.activeVideoPath || `raw/${ctx.activeVideo}`;
         workspaceLines.push(`## Active Video`);
-        workspaceLines.push(`The user is currently viewing: \`${ctx.activeVideo}\``);
-        workspaceLines.push(`Full path: \`${workspaceCwd}/raw/${ctx.activeVideo}\``);
+        workspaceLines.push(`The user is currently viewing: **${ctx.activeVideo}**`);
+        workspaceLines.push(`Full path: \`${workspaceCwd}/${videoPath}\``);
         if (ctx.duration) workspaceLines.push(`Duration: ${ctx.duration.toFixed(2)}s`);
         if (ctx.fps) workspaceLines.push(`FPS: ${ctx.fps}`);
         if (ctx.selection) {
           workspaceLines.push(`**Active selection: ${ctx.selection.inSeconds.toFixed(2)}s → ${ctx.selection.outSeconds.toFixed(2)}s** (${(ctx.selection.outSeconds - ctx.selection.inSeconds).toFixed(1)}s)`);
-          workspaceLines.push(`When the user says "this", "the selection", "this part" etc., they mean this time range.`);
+          workspaceLines.push(`When the user says "this", "the selection", "this part", "here" etc., they mean this time range in this video.`);
         }
+        workspaceLines.push(`When the user says "the video", "das Video" etc. without specifying which one, they mean this active video.`);
+        workspaceLines.push(``);
+      }
+
+      // Referenced files via @ mentions
+      if (ctx?.referencedFiles?.length) {
+        workspaceLines.push(`## Referenced Files`);
+        workspaceLines.push(`The user explicitly referenced these files in their message:`);
+        for (const f of ctx.referencedFiles) {
+          workspaceLines.push(`- \`${workspaceCwd}/${f}\``);
+        }
+        workspaceLines.push(`Use these files for the operation the user is requesting.`);
         workspaceLines.push(``);
       }
 

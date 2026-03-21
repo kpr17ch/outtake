@@ -5,9 +5,11 @@ import type { ChatMessage, ToolCall } from "./types";
 
 export interface EditorContext {
   activeVideo?: string;
+  activeVideoPath?: string;
   selection?: { inSeconds: number; outSeconds: number };
   duration?: number;
   fps?: number;
+  referencedFiles?: string[];
 }
 
 interface UseChatOptions {

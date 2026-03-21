@@ -239,13 +239,19 @@ function Message({ message }: { message: ChatMessage }) {
 
 // --- Chat Panel ---
 
+interface MentionableFile {
+  name: string;
+  path: string;
+}
+
 interface ChatPanelProps {
   activeSessionId: string | null;
   messages: ChatMessage[];
   isStreaming: boolean;
-  onSend: (input: string) => void;
+  onSend: (input: string, referencedFiles?: string[]) => void;
   onStop: () => void;
   selection?: { inSeconds: number; outSeconds: number } | null;
+  mediaFiles?: MentionableFile[];
 }
 
 export default function ChatPanel({
@@ -255,10 +261,16 @@ export default function ChatPanel({
   onSend,
   onStop,
   selection,
+  mediaFiles = [],
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [referencedFiles, setReferencedFiles] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -268,9 +280,51 @@ export default function ChatPanel({
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isStreaming) return;
-    onSend(input);
+    onSend(input, referencedFiles.length > 0 ? referencedFiles : undefined);
     setInput("");
-  }, [input, isStreaming, onSend]);
+    setReferencedFiles([]);
+  }, [input, isStreaming, onSend, referencedFiles]);
+
+  // @ mention filtering
+  const filteredFiles = mediaFiles.filter((f) =>
+    f.name.toLowerCase().includes(mentionFilter.toLowerCase())
+  );
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+
+    // Detect @ trigger
+    const cursorPos = e.target.selectionStart || 0;
+    const textBefore = val.slice(0, cursorPos);
+    const atMatch = textBefore.match(/@([^\s]*)$/);
+
+    if (atMatch) {
+      setShowMentions(true);
+      setMentionFilter(atMatch[1]);
+      setMentionIndex(0);
+    } else {
+      setShowMentions(false);
+    }
+  }, []);
+
+  const insertMention = useCallback((file: MentionableFile) => {
+    const cursorPos = inputRef.current?.selectionStart || input.length;
+    const textBefore = input.slice(0, cursorPos);
+    const textAfter = input.slice(cursorPos);
+    const atStart = textBefore.lastIndexOf("@");
+    const newText = textBefore.slice(0, atStart) + `@${file.name} ` + textAfter;
+    setInput(newText);
+    setShowMentions(false);
+    if (!referencedFiles.includes(file.path)) {
+      setReferencedFiles((prev) => [...prev, file.path]);
+    }
+    inputRef.current?.focus();
+  }, [input, referencedFiles]);
+
+  const removeMention = useCallback((path: string) => {
+    setReferencedFiles((prev) => prev.filter((p) => p !== path));
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -366,20 +420,61 @@ export default function ChatPanel({
             <span style={{ color: "var(--text-tertiary)" }}>({(selection.outSeconds - selection.inSeconds).toFixed(1)}s)</span>
           </div>
         )}
+        {/* Referenced files tags */}
+        {referencedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {referencedFiles.map((path) => {
+              const name = path.split("/").pop() || path;
+              return (
+                <span key={path} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono" style={{ background: "var(--accent-surface)", color: "var(--accent)" }}>
+                  @{name}
+                  <button onClick={() => removeMention(path)} className="cursor-pointer opacity-60 hover:opacity-100">✕</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
         <div
-          className="flex items-end rounded-lg px-3"
+          className="relative flex items-end rounded-lg px-3"
           style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
         >
+          {/* @ Mention dropdown */}
+          {showMentions && filteredFiles.length > 0 && (
+            <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg overflow-hidden shadow-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", maxHeight: 200 }}>
+              {filteredFiles.map((file, i) => (
+                <button
+                  key={file.path}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left cursor-pointer"
+                  style={{
+                    background: i === mentionIndex ? "var(--bg-overlay)" : "transparent",
+                    color: "var(--text-primary)",
+                  }}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(file); }}
+                >
+                  <span style={{ color: "var(--accent)" }}>@</span>
+                  <span className="truncate">{file.name}</span>
+                  <span className="ml-auto text-[10px]" style={{ color: "var(--text-tertiary)" }}>{file.path.startsWith("output") ? "result" : "source"}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
+            ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={(e) => {
+              if (showMentions && filteredFiles.length > 0) {
+                if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex((i) => Math.min(i + 1, filteredFiles.length - 1)); return; }
+                if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex((i) => Math.max(i - 1, 0)); return; }
+                if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertMention(filteredFiles[mentionIndex]); return; }
+                if (e.key === "Escape") { setShowMentions(false); return; }
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
               }
             }}
-            placeholder={messages.length === 0 ? "Ask the agent to edit, cut, analyze..." : "Follow up..."}
+            placeholder={messages.length === 0 ? "Ask the agent to edit, cut, analyze... (@ to reference files)" : "Follow up... (@ to reference files)"}
             className="flex-1 bg-transparent py-2.5 text-sm resize-none outline-none placeholder:text-[var(--text-tertiary)]"
             style={{ color: "var(--text-primary)", minHeight: 36, maxHeight: 120 }}
             rows={1}

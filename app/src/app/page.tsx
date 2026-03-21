@@ -57,6 +57,7 @@ export default function Home() {
 
   // ─── Media ───
   const [activeMedia, setActiveMedia] = useState<MediaItem | null>(null);
+  const [allMediaFiles, setAllMediaFiles] = useState<{ name: string; path: string }[]>([]);
   const previewRef = useRef<PreviewHandle>(null);
 
   // ─── Playback ───
@@ -177,12 +178,14 @@ export default function Home() {
     const sel = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
       ? { inSeconds: markers.inTime, outSeconds: markers.outTime }
       : undefined;
-    setEditorCtx({
+    setEditorCtx((prev) => ({
+      ...prev,
       activeVideo: activeMedia?.kind === "video" ? activeMedia.name : undefined,
+      activeVideoPath: activeMedia?.kind === "video" ? activeMedia.path : undefined,
       selection: sel,
       duration: duration || undefined,
       fps: fps || undefined,
-    });
+    }));
   }, [activeMedia, markers, duration, fps]);
 
   // ─── Chat with selection context ───
@@ -193,7 +196,13 @@ export default function Home() {
   const isFirstMsg = useRef(true);
   useEffect(() => { isFirstMsg.current = true; }, [sessionId]);
 
-  const handleSend = useCallback((input: string) => {
+  const handleSend = useCallback((input: string, referencedFiles?: string[]) => {
+    // Update editor context with referenced files before sending
+    if (referencedFiles?.length) {
+      setEditorCtx((prev) => ({ ...prev, referencedFiles }));
+    } else {
+      setEditorCtx((prev) => ({ ...prev, referencedFiles: undefined }));
+    }
     send(input);
 
     if (isFirstMsg.current && sessionId) {
@@ -217,6 +226,7 @@ export default function Home() {
             activeItem={activeMedia}
             onSelect={setActiveMedia}
             onNewOutput={handleNewOutput}
+            onItemsChange={setAllMediaFiles}
           />
         </div>
         <div className="flex-1 min-w-0">
@@ -256,6 +266,7 @@ export default function Home() {
           onSend={handleSend}
           onStop={stop}
           selection={selectionForChat}
+          mediaFiles={allMediaFiles}
         />
       </div>
     </div>

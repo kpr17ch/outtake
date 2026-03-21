@@ -16,6 +16,7 @@ interface MediaBinProps {
   activeItem: MediaItem | null;
   onSelect: (item: MediaItem) => void;
   onNewOutput?: (item: MediaItem) => void;
+  onItemsChange?: (items: { name: string; path: string }[]) => void;
 }
 
 function classifyFile(name: string): MediaItem["kind"] {
@@ -32,7 +33,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput }: MediaBinProps) {
+export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput, onItemsChange }: MediaBinProps) {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -65,6 +66,7 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput 
       }
 
       setItems(result);
+      onItemsChange?.(result.map((i) => ({ name: i.name, path: i.path })));
 
       // Detect new output files
       const currentOutputPaths = new Set(result.filter(i => i.group === "result").map(i => i.path));
