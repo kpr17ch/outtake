@@ -278,116 +278,75 @@ export default function ChatPanel({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag overlay */}
       {isDragOver && (
-        <div
-          className="absolute inset-0 z-50 flex items-center justify-center"
-          style={{
-            background: "rgba(10, 10, 10, 0.85)",
-            border: "2px dashed var(--accent)",
-            borderRadius: 8,
-            margin: 4,
-          }}
-        >
-          <div className="text-center">
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="mx-auto mb-2"
-              style={{ color: "var(--accent)" }}
-            >
-              <path
-                d="M12 16V4m0 0l-4 4m4-4l4 4M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <p className="text-sm font-medium" style={{ color: "var(--accent)" }}>
-              Drop to upload & notify agent
-            </p>
-            <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
-              Files will be uploaded to workspace/raw/
-            </p>
-          </div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(10,10,10,0.85)", border: "2px dashed var(--accent)", borderRadius: 8, margin: 4 }}>
+          <p className="text-xs" style={{ color: "var(--accent)" }}>Drop to upload</p>
         </div>
       )}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
-        <div className="max-w-2xl mx-auto">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-3">
-              <div className="text-lg font-medium tracking-tight" style={{ color: "var(--text-tertiary)" }}>
-                Outtake
-              </div>
-              <p className="text-[11px] text-center max-w-xs" style={{ color: "var(--text-tertiary)", opacity: 0.7 }}>
-                Describe what you want to edit.
-              </p>
-            </div>
-          )}
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pt-3 pb-2">
+        <div className="max-w-none">
           {messages.map((msg) => (
             <Message key={msg.id} message={msg} />
           ))}
         </div>
       </div>
 
-      <div className="px-6 py-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-        <div className="max-w-2xl mx-auto">
-          {/* Selection badge */}
-          {selection && (
-            <div
-              className="flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded text-[11px] font-mono"
-              style={{ background: "var(--accent-surface)", color: "var(--accent)" }}
-            >
-              <span>▸ {selection.inSeconds.toFixed(1)}s → {selection.outSeconds.toFixed(1)}s</span>
-              <span style={{ color: "var(--text-tertiary)" }}>
-                ({(selection.outSeconds - selection.inSeconds).toFixed(1)}s selected)
-              </span>
-            </div>
-          )}
-          <div className="flex items-end">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Describe what you want to edit..."
-              className="flex-1 bg-transparent px-0 py-2 text-sm resize-none outline-none placeholder:text-[var(--text-tertiary)]"
-              style={{ color: "var(--text-primary)", minHeight: 40, maxHeight: 160 }}
-              rows={1}
-            />
-            {isStreaming ? (
-              <button
-                onClick={onStop}
-                className="p-2 cursor-pointer rounded transition-colors"
-                style={{ color: "var(--text-tertiary)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; }}
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                  <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                onClick={handleSend}
-                className="p-2 cursor-pointer rounded transition-colors"
-                style={{ color: input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)" }}
-                onMouseEnter={(e) => { if (input.trim()) e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)"; }}
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            )}
+      {/* Input */}
+      <div className="px-4 py-2 shrink-0">
+        {/* Selection badge */}
+        {selection && (
+          <div
+            className="flex items-center gap-2 mb-1.5 px-2 py-1 rounded text-[10px] font-mono"
+            style={{ background: "var(--accent-surface)", color: "var(--accent)" }}
+          >
+            <span>▸ {selection.inSeconds.toFixed(1)}s → {selection.outSeconds.toFixed(1)}s</span>
+            <span style={{ color: "var(--text-tertiary)" }}>({(selection.outSeconds - selection.inSeconds).toFixed(1)}s)</span>
           </div>
+        )}
+        <div
+          className="flex items-end rounded-lg px-3"
+          style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder={messages.length === 0 ? "Ask the agent to edit, cut, analyze..." : "Follow up..."}
+            className="flex-1 bg-transparent py-2.5 text-sm resize-none outline-none placeholder:text-[var(--text-tertiary)]"
+            style={{ color: "var(--text-primary)", minHeight: 36, maxHeight: 120 }}
+            rows={1}
+          />
+          {isStreaming ? (
+            <button
+              onClick={onStop}
+              className="p-2 cursor-pointer rounded transition-colors shrink-0"
+              style={{ color: "var(--text-tertiary)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                <rect x="3" y="3" width="8" height="8" rx="1.5" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              className="p-2 cursor-pointer rounded transition-colors shrink-0"
+              style={{ color: input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)" }}
+              onMouseEnter={(e) => { if (input.trim()) e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     </div>
