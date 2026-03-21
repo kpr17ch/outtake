@@ -15,12 +15,14 @@ interface PreviewProps {
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   onPlayStateChange?: (playing: boolean) => void;
-  onMetadata?: (meta: { width: number; height: number; duration: number }) => void;
 }
 
 const Preview = forwardRef<PreviewHandle, PreviewProps>(
-  ({ src, onTimeUpdate, onDurationChange, onPlayStateChange, onMetadata }, ref) => {
+  ({ src, onTimeUpdate, onDurationChange, onPlayStateChange }, ref) => {
     const videoRef = useRef<HTMLVideoElement>(null);
+    // Store callback in ref so event listeners always see latest
+    const playStateRef = useRef(onPlayStateChange);
+    playStateRef.current = onPlayStateChange;
 
     useImperativeHandle(ref, () => ({
       seekTo: (s: number) => {
@@ -44,18 +46,23 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
       const v = videoRef.current;
       if (!v) return;
       onDurationChange?.(v.duration);
-      onMetadata?.({ width: v.videoWidth, height: v.videoHeight, duration: v.duration });
-    }, [onDurationChange, onMetadata]);
+    }, [onDurationChange]);
 
+    // Play/pause events — use ref to avoid stale closures
     useEffect(() => {
       const v = videoRef.current;
       if (!v) return;
-      const onPlay = () => onPlayStateChange?.(true);
-      const onPause = () => onPlayStateChange?.(false);
+      const onPlay = () => playStateRef.current?.(true);
+      const onPause = () => playStateRef.current?.(false);
       v.addEventListener("play", onPlay);
       v.addEventListener("pause", onPause);
-      return () => { v.removeEventListener("play", onPlay); v.removeEventListener("pause", onPause); };
-    }, [onPlayStateChange]);
+      // Also fire initial state
+      playStateRef.current?.(false);
+      return () => {
+        v.removeEventListener("play", onPlay);
+        v.removeEventListener("pause", onPause);
+      };
+    }, [src]); // Re-register when src changes (new video element content)
 
     if (!src) {
       return (
