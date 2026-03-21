@@ -19,10 +19,20 @@ class McpToolOperation(BaseOperation):
         return ValidationResult(ok=True)
 
     def apply(self, state: EditGraphState) -> StateDelta:
+        registrations = self.state_changes.get("register_versions", [])
+        for item in registrations:
+            state.file_versions.register_version(
+                origin_ref_id=item["origin_ref_id"],
+                ref_id=item["ref_id"],
+                file_path=item["file_path"],
+                created_by_op_id=self.op_id,
+            )
         updates = self.state_changes.get("active_file_refs", {})
         for origin_ref_id, ref_id in updates.items():
             state.file_versions.set_active_ref(origin_ref_id, ref_id)
-        modified = list(updates.keys())
+        modified = sorted(
+            set(list(updates.keys()) + [item["origin_ref_id"] for item in registrations])
+        )
         return StateDelta(modified=modified)
 
     def inverse(self, pre_context: PreApplyContext) -> BaseOperation:

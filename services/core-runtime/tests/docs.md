@@ -111,10 +111,16 @@ Covers every component systematically:
 
 ---
 
-### New Persistence Tests
+### New Persistence and MCP Integration Tests
 
 | File | What it verifies |
 |------|------------------|
 | `unit/test_project_store.py` | SQLite persistence of `project_state`, `operations`, `file_versions` |
 | `unit/test_cas.py` | CAS file hashing + storage path + dedup existence checks |
 | `integration/test_persistence_roundtrip.py` | `EditEngine` with `ProjectStore`: apply op, reload state from DB, verify `state_hash` roundtrip |
+| `integration/test_ffmpeg_e2e.py` | End-to-end path: FastMCP HTTP server + `HttpMcpClient` + `EngineProxy` + active-file-resolution + cut output + undo/redo pointer rollback |
+
+## Current Status
+
+- Full suite: `71` tests passing
+- Includes dynamic MCP operation/versioning coverage and real FFmpeg HTTP integration coverage

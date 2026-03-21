@@ -29,9 +29,22 @@ MCP-facing service that:
 Entry documentation:
 - `engine-proxy/docs.md`
 
+### `MCP server/`
+
+Standalone FastMCP HTTP server for FFmpeg capabilities.
+
+Responsibilities:
+- expose FFmpeg tools via MCP (`probe_media`, `cut_clip`, `concat_clips`, `transcode`, `extract_audio`, `add_subtitles`, `extract_thumbnail`)
+- validate that all file paths stay inside `WORKSPACE_ROOT`
+- return structured MCP tool outputs compatible with proxy logging (`output_file`, `output_ref_id`)
+
+Entry documentation:
+- `MCP server/docs.md`
+
 ## Data Responsibility Split
 
 - `core-runtime` owns **state model + mutation rules + history semantics**
 - `engine-proxy` owns **tool orchestration + external integration**
+- `MCP server` owns **actual media processing execution (ffmpeg/ffprobe)**
 
 This split keeps the core deterministic and testable while allowing dynamic MCP tool integration.

@@ -59,23 +59,29 @@ class EngineProxy:
         entry = self.registry.get(op_type)
         if entry is None:
             raise KeyError(f"Unknown proxied tool: {op_type}")
+        operation_args = dict(arguments)
+        if "origin_ref_id" in arguments and "input_file" not in arguments:
+            origin_ref_id = arguments["origin_ref_id"]
+            active = self.state.file_versions.get_active_version(origin_ref_id)
+            operation_args["input_file"] = active.file_path
+        schema_props = entry.input_schema.get("properties", {})
+        if isinstance(schema_props, dict) and schema_props:
+            upstream_args = {
+                key: value for key, value in operation_args.items() if key in schema_props
+            }
+        else:
+            upstream_args = dict(operation_args)
         upstream = self.clients[entry.server_name]
-        result = upstream.call_tool(entry.tool_name, arguments)
-        operation = self.operation_factory.build(entry, arguments, result)
-        self.engine.apply(operation, self.state)
+        result = upstream.call_tool(entry.tool_name, upstream_args)
+        operation = self.operation_factory.build(entry, operation_args, result)
         output_file = result.get("output_file")
-        origin_ref_id = arguments.get("origin_ref_id")
+        origin_ref_id = operation_args.get("origin_ref_id")
         output_ref_id = result.get("output_ref_id")
+        self.engine.apply(operation, self.state)
         if output_file and origin_ref_id and output_ref_id:
             cas_hash: str | None = None
             if self.content_store is not None:
                 cas_hash = self.content_store.put(Path(output_file))
-            self.state.file_versions.register_version(
-                origin_ref_id=origin_ref_id,
-                ref_id=output_ref_id,
-                file_path=output_file,
-                created_by_op_id=operation.op_id,
-            )
             if self.store is not None:
                 active_version = self.state.file_versions.get_active_version(origin_ref_id)
                 self.store.register_file(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,16 +16,8 @@ from core.engine import EditEngine
 from core.serialization.serializer import StateSerializer
 from core.storage.cas import ContentStore
 from core.storage.project_store import ProjectStore
+from http_mcp_client import HttpMcpClient
 from proxy import EngineProxy, UpstreamMcpClient
-
-
-class NullMcpClient(UpstreamMcpClient):
-    def list_tools(self) -> list[dict]:
-        return []
-
-    def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        _ = name, arguments
-        return {"status": "noop"}
 
 
 def load_or_create_project(project_dir: Path) -> tuple[EditEngine, EditGraphState, ProjectStore, ContentStore]:
@@ -53,10 +46,9 @@ def load_or_create_project(project_dir: Path) -> tuple[EditEngine, EditGraphStat
 def run_stdio() -> None:
     project_dir = Path("/workspace/project")
     engine, state, store, content_store = load_or_create_project(project_dir)
+    ffmpeg_mcp_url = os.environ.get("FFMPEG_MCP_URL", "http://localhost:8100")
     clients: dict[str, UpstreamMcpClient] = {
-        "ffmpeg": NullMcpClient(),
-        "whisperx": NullMcpClient(),
-        "media-gen": NullMcpClient(),
+        "ffmpeg": HttpMcpClient(ffmpeg_mcp_url),
     }
     proxy = EngineProxy(
         engine=engine,

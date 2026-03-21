@@ -118,3 +118,28 @@ Utility function that converts a `Clip` to a dict via `dataclasses.asdict()`.
 ### `__init__.py`
 
 Exports `OperationRegistry`.
+
+---
+
+### `mcp_tool_op.py` — Dynamic MCP Operations
+
+Provides generic operation types for external MCP tool calls:
+
+#### `McpToolOperation`
+
+Metadata fields:
+- `tool_schema_hash`
+- `result_snapshot`
+- `file_versions_before`
+- `state_changes`
+
+`apply(state)` handles dynamic state mutations:
+- `register_versions`: appends new immutable file versions into `FileVersionStore`
+- `active_file_refs`: updates active version pointers per origin asset
+
+This design avoids creating one Python class per external tool and keeps runtime extensible when MCP tool schemas evolve.
+
+#### `McpToolRestoreOperation`
+
+Marker inverse operation used by history logic.  
+Actual restoration is performed by engine snapshot restore path (`undo`/`redo`), not by imperative inverse mutation.

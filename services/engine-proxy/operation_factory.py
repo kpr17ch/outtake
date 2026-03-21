@@ -21,6 +21,13 @@ class OperationFactory:
         output_ref_id = tool_result.get("output_ref_id")
         if output_file and origin_ref_id and output_ref_id:
             state_changes["active_file_refs"] = {origin_ref_id: output_ref_id}
+            state_changes["register_versions"] = [
+                {
+                    "origin_ref_id": origin_ref_id,
+                    "ref_id": output_ref_id,
+                    "file_path": output_file,
+                }
+            ]
         return McpToolOperation(
             op_type=registry_entry.op_type,
             actor=registry_entry.server_name,
