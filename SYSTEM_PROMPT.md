@@ -276,20 +276,22 @@ Generate frame-accurate, animated word-by-word captions for any video.
 
 ### How to generate subtitles
 
+**All skill commands use absolute paths. The project root and workspace paths are provided at the end of this prompt under "Your Workspace" and "Running Skills".**
+
 ```bash
-node transcribe-pipeline.mjs --video <videoName> --jobId <job_id> --fps <fps>
+# 1. Copy video to Remotion public/ for rendering
+cp <workspace>/input/<video> <project_root>/public/
+
+# 2. Transcribe (run from project root)
+node <project_root>/transcribe-pipeline.mjs --video <video> --jobId <job_id> --fps <fps> --skipRender
+
+# 3. Render subtitles with Remotion (output to workspace)
+cd <project_root> && npx remotion render src/index.ts SubtitleJobPreview <workspace>/output/<name>_subtitles.mp4 --props '{"videoSrc":"<video>","captionsSrc":"jobs/<jobId>/aligned.json","durationInFrames":<frames>,"fps":<fps>,"width":<w>,"height":<h>}'
 ```
 
-This will:
-1. Extract audio from the video
-2. Transcribe with ElevenLabs Scribe v2 (auto language detection)
-3. Build word-level aligned captions
-4. Render a preview MP4 with captions overlay via Remotion
-
-Results:
-- `public/jobs/{jobId}/aligned.json` — word-level timestamps
-- `public/jobs/{jobId}/result.json` — diagnostics
-- `out/jobs/{jobId}/preview.mp4` — rendered preview with subtitles
+Transcription artifacts:
+- `<project_root>/public/jobs/{jobId}/aligned.json` — word-level timestamps
+- `<project_root>/public/jobs/{jobId}/result.json` — diagnostics
 
 ### Patch mode (timing adjustments)
 
@@ -324,19 +326,19 @@ Generate animated motion graphics overlays with liquid wave transitions, kinetic
 
 ### Step-by-step
 
-1. Ensure the video exists in `public/`
-2. Run transcription (skip subtitle render):
+1. Copy video to `<project_root>/public/` for Remotion access
+2. Run transcription from project root:
    ```bash
-   node transcribe-pipeline.mjs --video <videoName> --jobId <jobId> --skipRender
+   node <project_root>/transcribe-pipeline.mjs --video <videoName> --jobId <jobId> --skipRender
    ```
-3. Read `public/jobs/<jobId>/aligned.json` for word timings
+3. Read `<project_root>/public/jobs/<jobId>/aligned.json` for word timings
 4. Determine animation frame range (`animationStart`, `animationEnd`)
-5. Update `src/Root.tsx` defaultProps with correct values
-6. Render:
+5. Update `<project_root>/src/Root.tsx` defaultProps with correct values
+6. Render (output to workspace):
    ```bash
-   npx remotion render src/index.ts OuttakeMotion out/OuttakeMotion.mp4 --concurrency=4
+   cd <project_root> && npx remotion render src/index.ts OuttakeMotion <workspace>/output/<name>_motion.mp4 --concurrency=4
    ```
-7. Show `out/OuttakeMotion.mp4` to the user
+7. Show the rendered file to the user
 
 ### Important
 - `ELEVENLABS_API_KEY` must be set in `.env` at the project root
