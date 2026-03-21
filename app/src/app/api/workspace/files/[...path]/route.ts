@@ -1,41 +1,11 @@
-import { resolve, normalize } from "path";
 import { stat, open } from "fs/promises";
+import { resolveWorkspaceContext } from "@/lib/workspace-context";
+import {
+  getMimeType,
+  resolveWorkspaceEntryPath,
+} from "@/lib/workspace-server";
 
 export const runtime = "nodejs";
-
-const WORKSPACE = resolve(process.cwd(), "../workspace");
-
-const MIME_TYPES: Record<string, string> = {
-  // Video
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mov": "video/quicktime",
-  ".avi": "video/x-msvideo",
-  ".mkv": "video/x-matroska",
-  // Audio
-  ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".aac": "audio/aac",
-  ".ogg": "audio/ogg",
-  ".flac": "audio/flac",
-  // Image
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  // Text / JSON
-  ".json": "application/json",
-  ".txt": "text/plain",
-  ".srt": "text/plain",
-  ".md": "text/plain",
-};
-
-function getMimeType(filePath: string): string {
-  const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
-  return MIME_TYPES[ext] || "application/octet-stream";
-}
 
 export async function GET(
   request: Request,
@@ -43,10 +13,16 @@ export async function GET(
 ) {
   const { path: segments } = await ctx.params;
   const relativePath = segments.join("/");
+  const url = new URL(request.url);
+  const sessionId = url.searchParams.get("sessionId");
+  const workspace = await resolveWorkspaceContext(sessionId);
 
-  // Security: normalize and ensure path stays within workspace
-  const fullPath = normalize(resolve(WORKSPACE, relativePath));
-  if (!fullPath.startsWith(WORKSPACE)) {
+  if (sessionId && !workspace) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const fullPath = resolveWorkspaceEntryPath(workspace!.workspacePath, relativePath);
+  if (!fullPath) {
     return new Response("Forbidden", { status: 403 });
   }
 

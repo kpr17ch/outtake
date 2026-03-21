@@ -1,32 +1,12 @@
-import { resolve, normalize, relative, extname } from "path";
+import { relative } from "path";
 import { readdir, stat } from "fs/promises";
+import { resolveWorkspaceContext } from "@/lib/workspace-context";
+import {
+  getMimeType,
+  resolveWorkspaceEntryPath,
+} from "@/lib/workspace-server";
 
 export const runtime = "nodejs";
-
-const WORKSPACE = resolve(process.cwd(), "../workspace");
-
-const MIME_TYPES: Record<string, string> = {
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mov": "video/quicktime",
-  ".avi": "video/x-msvideo",
-  ".mkv": "video/x-matroska",
-  ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".aac": "audio/aac",
-  ".ogg": "audio/ogg",
-  ".flac": "audio/flac",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".json": "application/json",
-  ".txt": "text/plain",
-  ".srt": "text/plain",
-  ".md": "text/plain",
-};
 
 export interface FileEntry {
   name: string;
@@ -38,9 +18,12 @@ export interface FileEntry {
   children?: FileEntry[];
 }
 
-async function listDir(dirPath: string): Promise<FileEntry[]> {
-  const normalizedDir = normalize(dirPath);
-  if (!normalizedDir.startsWith(WORKSPACE)) {
+async function listDir(
+  workspacePath: string,
+  dirPath: string
+): Promise<FileEntry[]> {
+  const normalizedDir = resolveWorkspaceEntryPath(workspacePath, relative(workspacePath, dirPath));
+  if (!normalizedDir) {
     return [];
   }
 
@@ -57,8 +40,15 @@ async function listDir(dirPath: string): Promise<FileEntry[]> {
     // Skip hidden files and node_modules
     if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
 
-    const fullPath = resolve(normalizedDir, entry.name);
-    const relPath = relative(WORKSPACE, fullPath);
+    const fullPath = resolveWorkspaceEntryPath(
+      workspacePath,
+      relative(workspacePath, normalizedDir) ? `${relative(workspacePath, normalizedDir)}/${entry.name}` : entry.name
+    );
+    if (!fullPath) {
+      continue;
+    }
+
+    const relPath = relative(workspacePath, fullPath);
 
     let fileStat;
     try {
@@ -68,7 +58,7 @@ async function listDir(dirPath: string): Promise<FileEntry[]> {
     }
 
     if (entry.isDirectory()) {
-      const children = await listDir(fullPath);
+      const children = await listDir(workspacePath, fullPath);
       results.push({
         name: entry.name,
         path: relPath,
@@ -78,14 +68,13 @@ async function listDir(dirPath: string): Promise<FileEntry[]> {
         children,
       });
     } else if (entry.isFile()) {
-      const ext = extname(entry.name).toLowerCase();
       results.push({
         name: entry.name,
         path: relPath,
         type: "file",
         size: fileStat.size,
         modified: fileStat.mtime.toISOString(),
-        mimeType: MIME_TYPES[ext] || "application/octet-stream",
+        mimeType: getMimeType(entry.name),
       });
     }
   }
@@ -99,7 +88,15 @@ async function listDir(dirPath: string): Promise<FileEntry[]> {
   return results;
 }
 
-export async function GET() {
-  const tree = await listDir(WORKSPACE);
-  return Response.json({ workspace: WORKSPACE, tree });
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const sessionId = url.searchParams.get("sessionId");
+  const workspace = await resolveWorkspaceContext(sessionId);
+
+  if (sessionId && !workspace) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const tree = await listDir(workspace!.workspacePath, workspace!.workspacePath);
+  return Response.json({ workspace: workspace!.workspacePath, tree });
 }

@@ -1,21 +1,38 @@
 import { writeFile, mkdir } from "fs/promises";
-import { resolve, join } from "path";
+import { join } from "path";
+import { resolveWorkspaceContext } from "@/lib/workspace-context";
+import {
+  sanitizeUploadedFilename,
+  resolveWorkspaceEntryPath,
+} from "@/lib/workspace-server";
 
 export const runtime = "nodejs";
 
 const ALLOWED_TYPES = ["video/", "audio/", "image/"];
-const RAW_DIR = resolve(process.cwd(), "../workspace/raw");
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
+    const sessionIdValue = formData.get("sessionId");
+    const sessionId =
+      typeof sessionIdValue === "string" && sessionIdValue ? sessionIdValue : null;
 
     if (!files.length) {
       return Response.json({ error: "No files provided" }, { status: 400 });
     }
 
-    await mkdir(RAW_DIR, { recursive: true });
+    const workspace = await resolveWorkspaceContext(sessionId);
+    if (sessionId && !workspace) {
+      return Response.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    const rawDir = resolveWorkspaceEntryPath(workspace!.workspacePath, "raw");
+    if (!rawDir) {
+      return Response.json({ error: "Invalid workspace path" }, { status: 500 });
+    }
+
+    await mkdir(rawDir, { recursive: true });
 
     const results = [];
 
@@ -31,9 +48,8 @@ export async function POST(req: Request) {
         continue;
       }
 
-      // Sanitize filename: keep extension, replace unsafe chars
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const filePath = join(RAW_DIR, safeName);
+      const safeName = sanitizeUploadedFilename(file.name);
+      const filePath = join(rawDir, safeName);
 
       const buffer = Buffer.from(await file.arrayBuffer());
       await writeFile(filePath, buffer);
@@ -41,7 +57,7 @@ export async function POST(req: Request) {
       results.push({
         filename: safeName,
         originalName: file.name,
-        path: `workspace/raw/${safeName}`,
+        path: `raw/${safeName}`,
         size: file.size,
         type: file.type,
       });

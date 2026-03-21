@@ -1,27 +1,20 @@
 import { spawn } from "child_process";
 import { resolve } from "path";
-import { getSession } from "@/lib/sessions";
+import { resolveWorkspaceContext } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-// Default workspace — fallback when no session is provided
-const DEFAULT_WORKSPACE = resolve(process.cwd(), "../workspace");
-
 export async function POST(req: Request) {
   const { message, sessionId } = await req.json();
+  const workspace = await resolveWorkspaceContext(sessionId);
 
-  // Look up session to get workspace path and Claude session ID
-  let workspaceCwd = DEFAULT_WORKSPACE;
-  let claudeSessionId: string | undefined;
-
-  if (sessionId) {
-    const session = await getSession(sessionId);
-    if (session) {
-      workspaceCwd = session.workspacePath;
-      claudeSessionId = session.claudeSessionId;
-    }
+  if (sessionId && !workspace) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
+
+  const workspaceCwd = workspace?.workspacePath;
+  const claudeSessionId = workspace?.claudeSessionId;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -60,7 +53,7 @@ export async function POST(req: Request) {
       delete cleanEnv.ANTHROPIC_API_KEY;
 
       const proc = spawn(claudeBin, args, {
-        cwd: process.env.OUTTAKE_CWD || workspaceCwd,
+        cwd: workspaceCwd,
         env: cleanEnv,
         stdio: ["ignore", "pipe", "pipe"],
       });

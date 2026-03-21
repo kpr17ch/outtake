@@ -183,8 +183,12 @@ function FileTreeNode({
 
 // --- Main VideoPanel ---
 
-export default function VideoPanel() {
-  const { tree, isLoading, refresh, newOutputFiles } = useWorkspace();
+interface VideoPanelProps {
+  activeSessionId: string | null;
+}
+
+export default function VideoPanel({ activeSessionId }: VideoPanelProps) {
+  const { tree, isLoading, refresh, newOutputFiles } = useWorkspace(activeSessionId);
   const [activeFile, setActiveFile] = useState<FileEntry | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -198,6 +202,13 @@ export default function VideoPanel() {
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const fileCategory = activeFile ? getFileCategory(activeFile.mimeType) : null;
+
+  useEffect(() => {
+    setActiveFile(null);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }, [activeSessionId]);
 
   // Auto-select new output files
   useEffect(() => {
@@ -224,13 +235,14 @@ export default function VideoPanel() {
   const uploadFiles = useCallback(
     async (fileList: FileList | File[]) => {
       const files = Array.from(fileList);
-      if (!files.length) return;
+      if (!files.length || !activeSessionId) return;
 
       setUploading(true);
       const formData = new FormData();
       for (const file of files) {
         formData.append("files", file);
       }
+      formData.append("sessionId", activeSessionId);
 
       try {
         const res = await fetch("/api/upload", {
@@ -246,7 +258,7 @@ export default function VideoPanel() {
         setUploading(false);
       }
     },
-    [refresh]
+    [activeSessionId, refresh]
   );
 
   // Drag & drop handlers
@@ -277,9 +289,14 @@ export default function VideoPanel() {
   );
 
   const getPreviewUrl = useCallback(() => {
-    if (!activeFile) return null;
-    return `/api/workspace/files/${activeFile.path}`;
-  }, [activeFile]);
+    if (!activeFile || !activeSessionId) return null;
+    const params = new URLSearchParams();
+    params.set("sessionId", activeSessionId);
+    const query = params.toString();
+    return query
+      ? `/api/workspace/files/${activeFile.path}?${query}`
+      : `/api/workspace/files/${activeFile.path}`;
+  }, [activeFile, activeSessionId]);
 
   const handleSelectFile = useCallback((entry: FileEntry) => {
     setActiveFile(entry);
