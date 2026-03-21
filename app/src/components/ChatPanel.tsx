@@ -183,6 +183,7 @@ interface ChatPanelProps {
   isStreaming: boolean;
   onSend: (input: string) => void;
   onStop: () => void;
+  selection?: { inSeconds: number; outSeconds: number } | null;
 }
 
 export default function ChatPanel({
@@ -191,6 +192,7 @@ export default function ChatPanel({
   isStreaming,
   onSend,
   onStop,
+  selection,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
@@ -333,6 +335,18 @@ export default function ChatPanel({
 
       <div className="px-6 py-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
         <div className="max-w-2xl mx-auto">
+          {/* Selection badge */}
+          {selection && (
+            <div
+              className="flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded text-[11px] font-mono"
+              style={{ background: "var(--accent-surface)", color: "var(--accent)" }}
+            >
+              <span>▸ {selection.inSeconds.toFixed(1)}s → {selection.outSeconds.toFixed(1)}s</span>
+              <span style={{ color: "var(--text-tertiary)" }}>
+                ({(selection.outSeconds - selection.inSeconds).toFixed(1)}s selected)
+              </span>
+            </div>
+          )}
           <div className="flex items-end">
             <textarea
               value={input}

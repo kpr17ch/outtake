@@ -10,11 +10,14 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.81",
+    "@remotion/media": "^4.0.438",
+    "@remotion/player": "^4.0.438",
     "next": "16.2.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remotion": "^4.0.438"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
