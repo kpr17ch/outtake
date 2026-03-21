@@ -5,10 +5,10 @@
 	"main": "src/index.ts",
 	"scripts": {
 		"studio": "remotion studio src/index.ts",
-		"render": "remotion render src/index.ts SubtitleJobPreview out/outtakes-caption.mp4",
-		"preview": "remotion preview src/index.ts SubtitleJobPreview",
-		"subtitles": "node subtitle-pipeline.mjs",
-		"subtitles:patch": "node subtitle-pipeline.mjs --mode patch"
+		"render": "remotion render src/index.ts OuttakeMotion out/OuttakeMotion.mp4",
+		"preview": "remotion preview src/index.ts OuttakeMotion",
+		"transcribe": "node transcribe-pipeline.mjs",
+		"transcribe:patch": "node transcribe-pipeline.mjs --mode patch"
 	},
 	"dependencies": {
 		"@elevenlabs/elevenlabs-js": "^2.39.0",

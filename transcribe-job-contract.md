@@ -1,8 +1,10 @@
-# Subtitle Job Contract
+# Transcription Job Contract
 
 ## Purpose
 
-Defines the stable input/output contract between your web app and `subtitle-pipeline.mjs`.
+Defines the stable input/output contract between your web app and `transcribe-pipeline.mjs`.
+The pipeline transcribes video audio via ElevenLabs Scribe v2, producing word-level timestamps
+used by the `OuttakeMotion` Remotion composition for motion graphics animations.
 
 ## Prerequisites
 
@@ -14,7 +16,7 @@ Defines the stable input/output contract between your web app and `subtitle-pipe
 ### Full generation mode
 
 ```bash
-node subtitle-pipeline.mjs --video VIDEO.mp4 [--jobId JOB_ID] [--fps 30] [--lang eng]
+node transcribe-pipeline.mjs --video VIDEO.mp4 [--jobId JOB_ID] [--fps 30] [--lang eng]
 ```
 
 - `--video` (required): filename in `public/` or absolute path
@@ -25,7 +27,7 @@ node subtitle-pipeline.mjs --video VIDEO.mp4 [--jobId JOB_ID] [--fps 30] [--lang
 ### Feedback patch mode
 
 ```bash
-node subtitle-pipeline.mjs --mode patch --jobId JOB_ID --patch PATCH.json
+node transcribe-pipeline.mjs --mode patch --jobId JOB_ID --patch PATCH.json
 ```
 
 - Loads existing `public/jobs/{jobId}/aligned.json`
@@ -59,7 +61,7 @@ For each job id:
 |------|------|
 | Source video copy | `public/jobs/{jobId}/source.mp4` |
 | Extracted audio | `public/jobs/{jobId}/audio.mp3` |
-| Aligned captions | `public/jobs/{jobId}/aligned.json` |
+| Aligned words | `public/jobs/{jobId}/aligned.json` |
 | Diagnostics | `public/jobs/{jobId}/result.json` |
 | Preview render | `out/jobs/{jobId}/preview.mp4` |
 
@@ -116,8 +118,8 @@ For each job id:
 ## Web App Integration
 
 1. Set `ELEVENLABS_API_KEY` in the server environment.
-2. Call `subtitle-pipeline.mjs` from your API route (or agent) as a child process.
+2. Call `transcribe-pipeline.mjs` from your API route (or agent) as a child process.
 3. Poll by `jobId` — read `result.json` for completion status.
-4. Show `preview.mp4` in UI for user feedback.
+4. Pass `aligned.json` as `captionsSrc` to the `OuttakeMotion` Remotion composition.
 5. If timing is off, send a patch JSON to patch mode.
-6. Persist approved `aligned.json` as the final subtitles source of truth.
+6. Persist approved `aligned.json` as the final word-timing source of truth.
