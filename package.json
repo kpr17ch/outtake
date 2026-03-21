@@ -1,0 +1,27 @@
+{
+	"name": "outtake",
+	"version": "1.0.0",
+	"description": "Outtake — AI Video Editor Agent",
+	"main": "src/index.ts",
+	"scripts": {
+		"studio": "remotion studio src/index.ts",
+		"render": "remotion render src/index.ts SubtitleJobPreview out/outtakes-caption.mp4",
+		"preview": "remotion preview src/index.ts SubtitleJobPreview",
+		"subtitles": "node subtitle-pipeline.mjs",
+		"subtitles:patch": "node subtitle-pipeline.mjs --mode patch"
+	},
+	"dependencies": {
+		"@elevenlabs/elevenlabs-js": "^2.39.0",
+		"@remotion/google-fonts": "^4.0.438",
+		"dotenv": "^17.3.1",
+		"react": "^19.2.4",
+		"react-dom": "^19.2.4",
+		"remotion": "^4.0.438"
+	},
+	"devDependencies": {
+		"@remotion/cli": "^4.0.438",
+		"@types/react": "^19.2.14",
+		"@types/react-dom": "^19.2.3",
+		"typescript": "^5.9.3"
+	}
+}
