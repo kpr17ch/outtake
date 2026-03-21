@@ -49,19 +49,27 @@ export default function MediaBin({ sessionId, activeItem, onSelect }: MediaBinPr
       if (!res.ok) return;
       const data = await res.json();
       const result: MediaItem[] = [];
-      function walk(entries: Array<Record<string, unknown>>) {
+      // Only show files from raw/ and output/ — skip workspace/, assets/, etc.
+      const MEDIA_DIRS = new Set(["raw", "output"]);
+      function walk(entries: Array<Record<string, unknown>>, depth = 0) {
         for (const e of entries) {
+          const name = e.name as string;
           if (e.type === "dir" && Array.isArray(e.children)) {
-            walk(e.children as Array<Record<string, unknown>>);
+            // At top level, only recurse into raw/ and output/
+            if (depth === 0 && !MEDIA_DIRS.has(name)) continue;
+            walk(e.children as Array<Record<string, unknown>>, depth + 1);
           } else if (e.type === "file") {
-            const name = e.name as string;
             const path = e.path as string;
             const kind = classifyFile(name);
             if (kind !== "other") {
+              // Videos go through proxy endpoint for auto-transcoding of incompatible codecs
+              const endpoint = kind === "video"
+                ? `/api/workspace/proxy/${path}?sessionId=${sessionId}`
+                : `/api/workspace/files/${path}?sessionId=${sessionId}`;
               result.push({
                 name,
                 path,
-                url: `/api/workspace/files/${path}?sessionId=${sessionId}`,
+                url: endpoint,
                 kind,
                 size: (e.size as number) || 0,
               });

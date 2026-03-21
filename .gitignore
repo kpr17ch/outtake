@@ -27,5 +27,6 @@ transcripts/
 .cas/
 .tmp_storage_test/
 .frames/
+.proxy/
 .DS_Store
 remotion/
