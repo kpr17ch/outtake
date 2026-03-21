@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import MediaBin, { type MediaItem } from "@/components/MediaBin";
+import dynamic from "next/dynamic";
 import Preview, { type PreviewHandle } from "@/components/Preview";
 import Timeline, { type Marker } from "@/components/Timeline";
 import ChatPanel from "@/components/ChatPanel";
 import { useChat } from "@/lib/useChat";
 import type { Session } from "@/lib/types";
+import type { MediaItem } from "@/components/MediaBin";
+
+// Dynamic import to avoid SSR hydration mismatch
+const MediaBin = dynamic(() => import("@/components/MediaBin"), { ssr: false });
 
 export default function Home() {
   // ─── Session ───

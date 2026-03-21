@@ -66,13 +66,20 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
     }
 
     return (
-      <div className="w-full h-full flex items-center justify-center" style={{ background: "#000" }}>
+      <div
+        className="w-full h-full flex items-center justify-center cursor-pointer"
+        style={{ background: "#000" }}
+        onClick={() => {
+          const v = videoRef.current;
+          if (v) v.paused ? v.play() : v.pause();
+        }}
+      >
         <video
           ref={videoRef}
           src={src}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
-          className="max-w-full max-h-full"
+          className="max-w-full max-h-full pointer-events-none"
           style={{ objectFit: "contain" }}
           preload="auto"
         />
