@@ -3,10 +3,14 @@
 import { useState, useRef, useCallback } from "react";
 import type { ChatMessage, ToolCall } from "./types";
 
-export function useChat() {
+interface UseChatOptions {
+  activeSessionId: string | null;
+  onClaudeSessionId?: (claudeSessionId: string) => void;
+}
+
+export function useChat({ activeSessionId, onClaudeSessionId }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
@@ -43,7 +47,10 @@ export function useChat() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: input.trim(), sessionId }),
+          body: JSON.stringify({
+            message: input.trim(),
+            sessionId: activeSessionId,
+          }),
           signal: abortRef.current.signal,
         });
 
@@ -96,14 +103,17 @@ export function useChat() {
         );
       }
     },
-    [isStreaming, sessionId]
+    [isStreaming, activeSessionId]
   );
 
   const handleEvent = useCallback(
     (msg: Record<string, unknown>, assistantId: string) => {
-      // Capture session ID
+      // Capture Claude session ID and save it back to the session
       if (msg.type === "system" && msg.subtype === "init") {
-        setSessionId(msg.session_id as string);
+        const claudeSessionId = msg.session_id as string;
+        if (claudeSessionId && activeSessionId) {
+          onClaudeSessionId?.(claudeSessionId);
+        }
         return;
       }
 
@@ -181,7 +191,7 @@ export function useChat() {
         return;
       }
     },
-    []
+    [activeSessionId, onClaudeSessionId]
   );
 
   const stop = useCallback(() => {
@@ -191,8 +201,7 @@ export function useChat() {
 
   const reset = useCallback(() => {
     setMessages([]);
-    setSessionId(null);
   }, []);
 
-  return { messages, isStreaming, sessionId, send, stop, reset };
+  return { messages, isStreaming, send, stop, reset };
 }
