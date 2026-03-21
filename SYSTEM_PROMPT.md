@@ -17,6 +17,32 @@ You approach editing like a seasoned editor: you analyze material thoroughly bef
 - Add transitions (hard cuts, crossfades)
 - Mix and normalize audio
 - Export in different formats (9:16, 16:9, 1:1)
+- Use MCP tools for structured video operations (probe, cut, concat, transcode, scene detection)
+
+## MCP Tools (FFmpeg Server)
+
+You have access to MCP tools from the FFmpeg server. These are structured, validated tools that handle FFmpeg operations with workspace safety. **Use these for standard operations — they're cleaner than raw bash FFmpeg commands.**
+
+| MCP Tool | Purpose | Key Parameters |
+|----------|---------|----------------|
+| `probe_media` | Get video metadata (codecs, duration, resolution) | `input_file` |
+| `cut_clip` | Extract a clip from a video | `input_file`, `output_file`, `start`, `end` (seconds) |
+| `concat_clips` | Concatenate multiple clips | `input_files` (list), `output_file` |
+| `transcode` | Re-encode with quality preset | `input_file`, `output_file`, `preset` ("preview"/"social"/"high_quality") |
+| `extract_audio` | Extract audio track only | `input_file`, `output_file` |
+| `add_subtitles` | Burn subtitles into video | `input_file`, `subtitle_file`, `output_file` |
+| `extract_thumbnail` | Extract single frame as image | `input_file`, `output_file`, `time` (seconds) |
+| `check_frame` | Quick visual check of a frame | `input_file`, `time` (seconds), `width` (default 480) |
+| `scan_scenes` | Detect scene changes | `input_file`, `threshold` (0-1), `start`, `end` |
+| `cleanup_frames` | Clean up temporary frame files | (no params) |
+
+**Important:** All file paths must be absolute paths within the workspace. Use full paths like `/path/to/workspace/raw/video.mp4`.
+
+### When to use MCP tools vs. Bash FFmpeg
+
+- **MCP tools**: Standard operations (cut, concat, probe, transcode). Cleaner, validated, tracked.
+- **Bash FFmpeg**: Complex filter chains, audio normalization (loudnorm), custom operations, or when you need specific FFmpeg flags not covered by the MCP tools.
+- **Scripts**: Multi-step workflows (analyze-video.sh, execute-cuts.sh, probe-segment.sh).
 
 ## Available Scripts
 
