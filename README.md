@@ -2,49 +2,90 @@
 
 AI-powered video editing agent. Cursor for video editing.
 
-Uses Claude Code as runtime + MCP servers for video tools.
+Built on the Claude Agent SDK — the same engine that powers Claude Code, now configured for video editing workflows.
 
-## Setup
+## Quick Start
 
 ```bash
-# Install Claude Code
-npm install -g @anthropic-ai/claude-code
+cd app
+npm install
 
-# Run in project directory
-cd outtake
-claude
+# Set your API key
+cp .env.local.example .env.local
+# Edit .env.local and add your ANTHROPIC_API_KEY
+
+npm run dev
+# Open http://localhost:3000
 ```
+
+## How It Works
+
+Outtake uses the **Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`) to run Claude as an autonomous video editing agent. The agent has access to:
+
+- **Bash** — Execute FFmpeg commands, run scripts
+- **Read/Write/Edit** — Manage project files, edit configs
+- **Glob/Grep** — Search through video projects
+- **MCP Servers** — Custom tools for transcription, media generation, etc.
+
+The agent runs with `permissionMode: "bypassPermissions"` so it can execute FFmpeg commands and file operations without interactive prompts.
 
 ## Architecture
 
 ```
-Claude Code (Agent Runtime + Claude Opus)
-  ├── MCP: ffmpeg-server      -> Video cutting, transitions, audio
-  ├── MCP: whisperx-server    -> Transcription, speaker diarization
-  └── MCP: media-gen-server   -> Voice, music, SFX generation
+Next.js Web App (app/)
+  |
+  +-- /api/chat (Server Route)
+  |     |
+  |     +-- Claude Agent SDK
+  |           |
+  |           +-- Claude Opus 4.6
+  |           +-- Built-in tools (Bash, Read, Write, Edit, Glob, Grep)
+  |           +-- MCP: ffmpeg-tools (coming)
+  |           +-- MCP: whisperx (coming)
+  |           +-- MCP: media-gen (coming)
+  |
+  +-- Chat UI (React)
+  |     +-- Streaming responses
+  |     +-- Thinking blocks
+  |     +-- Tool call visualization
+  |
+  +-- Video Preview Panel
+        +-- HTML5 video player
+        +-- Timeline scrubbing
 ```
 
 ## Project Structure
 
 ```
 outtake/
-├── CLAUDE.md              <- Agent instructions
-├── .claude/settings.json  <- MCP server config
-├── mcp-servers/
-│   ├── ffmpeg-server/     -> FFmpeg operations as MCP tools
-│   ├── whisperx-server/   -> Transcription + speaker ID
-│   └── media-gen-server/  -> Voice, music, SFX generation
-├── core/                  -> Pipeline, orchestration
-├── generators/            -> Media generation modules
-└── engine/                -> Edit state, undo/redo, tool registry
++-- app/                     <- Next.js web application
+|   +-- src/
+|   |   +-- app/
+|   |   |   +-- api/chat/    <- Claude Agent SDK integration
+|   |   |   +-- page.tsx     <- Main layout
+|   |   +-- components/      <- UI components
+|   |   +-- lib/             <- Chat hook, types
+|   +-- .env.local           <- API key (not committed)
++-- CLAUDE.md                <- Agent system prompt
++-- mcp-servers/             <- Custom MCP servers (coming)
+|   +-- ffmpeg-server/       <- FFmpeg operations
+|   +-- whisperx-server/     <- Transcription + speaker ID
+|   +-- media-gen-server/    <- Voice, music, SFX generation
++-- core/                    <- Pipeline orchestration (coming)
++-- generators/              <- Media generation modules (coming)
++-- engine/                  <- Edit state, undo/redo (coming)
 ```
 
-## Also works with OpenCode
+## Team
 
-```bash
-# Install OpenCode
-curl -fsSL https://opencode.ai/install | bash
+- **Person 1** — Core platform, AI brain, Claude Agent SDK integration
+- **Person 2** — Media generation (voice, music, SFX, B-Roll)
+- **Person 3** — Edit engine, undo/redo, tool registry, MCP orchestration
 
-cd outtake
-opencode
-```
+## Tech Stack
+
+- **Runtime**: Claude Agent SDK + Claude Opus 4.6
+- **Frontend**: Next.js 16, React 19, Tailwind CSS 4
+- **Video**: FFmpeg (via Bash), Remotion (planned)
+- **Transcription**: WhisperX (planned MCP server)
+- **Audio**: ElevenLabs / Kokoro (planned)
