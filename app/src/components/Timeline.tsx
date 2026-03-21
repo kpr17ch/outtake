@@ -80,8 +80,20 @@ export default function Timeline({
     <div className="shrink-0 select-none" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--bg-surface)" }}>
       {/* Controls bar */}
       <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        <button onClick={onTogglePlay} className="text-sm cursor-pointer w-5 text-center" style={{ color: "var(--text-secondary)" }}>
-          {isPlaying ? "⏸" : "▶"}
+        <button onClick={onTogglePlay} className="cursor-pointer w-7 h-7 flex items-center justify-center rounded transition-colors" style={{ color: "var(--text-secondary)", background: "var(--bg-elevated)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-overlay)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-elevated)"; }}
+        >
+          {isPlaying ? (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <rect x="3" y="2" width="3" height="10" rx="0.5" />
+              <rect x="8" y="2" width="3" height="10" rx="0.5" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M4 2.5v9l7-4.5L4 2.5z" />
+            </svg>
+          )}
         </button>
         <span className="text-[11px] font-mono" style={{ color: "var(--text-secondary)" }}>
           {fmt(currentTime)} / {fmt(duration)}
