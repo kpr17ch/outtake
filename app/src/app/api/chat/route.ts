@@ -7,7 +7,7 @@ export const maxDuration = 300;
 
 interface EditorContext {
   activeVideo?: string;
-  activeVideoPath?: string; // relative path like "raw/video.mp4" or "output/cut.mp4"
+  activeVideoPath?: string; // relative path like "input/video.mp4" or "output/cut.mp4"
   selection?: { inSeconds: number; outSeconds: number };
   duration?: number;
   fps?: number;
@@ -44,15 +44,16 @@ export async function POST(req: Request) {
         `**All file paths for MCP tools must be absolute paths under this directory.**`,
         ``,
         `Directories:`,
-        `- \`${workspaceCwd}/raw/\` — Source files (NEVER modify)`,
-        `- \`${workspaceCwd}/output/\` — Rendered results`,
-        `- \`${workspaceCwd}/workspace/\` — Working copies`,
+        `- \`${workspaceCwd}/input/\` — Source files uploaded by the user (NEVER modify originals)`,
+        `- \`${workspaceCwd}/output/\` — ALL results go here (cuts, renders, subtitles, motion graphics, generated videos, SFX)`,
+        ``,
+        `**IMPORTANT: Always save output files to \`${workspaceCwd}/output/\`. Never save results outside the workspace.**`,
         ``,
       ];
 
       // Add editor context so agent knows what user is looking at
       if (ctx?.activeVideo) {
-        const videoPath = ctx.activeVideoPath || `raw/${ctx.activeVideo}`;
+        const videoPath = ctx.activeVideoPath || `input/${ctx.activeVideo}`;
         workspaceLines.push(`## Active Video`);
         workspaceLines.push(`The user is currently viewing: **${ctx.activeVideo}**`);
         workspaceLines.push(`Full path: \`${workspaceCwd}/${videoPath}\``);

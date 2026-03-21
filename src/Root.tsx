@@ -13,10 +13,10 @@ export const Root = () => {
 				width={1920}
 				height={1080}
 				defaultProps={{
-					jobId: "demo-subtitles",
-					videoSrc: "OuttakesQuelle1.mp4",
-					captionsSrc: "jobs/demo-subtitles/aligned.json",
-					durationInFrames: 1800,
+					jobId: "cleanshot-reel",
+					videoSrc: "CleanShot_reel_15s.mp4",
+					captionsSrc: "jobs/cleanshot-reel/aligned.json",
+					durationInFrames: 1565,
 				}}
 				calculateMetadata={({props}) => {
 					const dynamic = props as {
@@ -36,15 +36,15 @@ export const Root = () => {
 			<Composition
 				id="OuttakeMotion"
 				component={OuttakeMotion}
-				durationInFrames={327}
-				fps={30}
-				width={1920}
-				height={1080}
+				durationInFrames={1565}
+				fps={120}
+				width={3582}
+				height={1860}
 				defaultProps={{
-					videoSrc: "OuttakesQuelle1.mp4",
-					captionsSrc: "jobs/outtake-motion/aligned.json",
-					animationStart: 78,
-					animationEnd: 170,
+					videoSrc: "CleanShot_reel_15s.mp4",
+					captionsSrc: "jobs/cleanshot-reel/aligned.json",
+					animationStart: 320,
+					animationEnd: 645,
 				}}
 			/>
 		</>

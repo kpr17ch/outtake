@@ -49,8 +49,8 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
 
       for (const topDir of (data.tree || []) as Array<Record<string, unknown>>) {
         const dirName = topDir.name as string;
-        if (topDir.type !== "dir" || !["raw", "output"].includes(dirName)) continue;
-        const group: MediaItem["group"] = dirName === "raw" ? "source" : "result";
+        if (topDir.type !== "dir" || !["input", "output"].includes(dirName)) continue;
+        const group: MediaItem["group"] = dirName === "input" ? "source" : "result";
 
         for (const entry of (topDir.children || []) as Array<Record<string, unknown>>) {
           if (entry.type !== "file") continue;

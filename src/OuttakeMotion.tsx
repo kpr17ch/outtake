@@ -79,8 +79,7 @@ const LiquidWave: React.FC<{progress: number; color: string; direction: "in" | "
 	color,
 	direction,
 }) => {
-	const w = 1920;
-	const h = 1080;
+	const {width: w, height: h} = useVideoConfig();
 	const overflow = 350;
 
 	const edgePoints = DRIP_POINTS.map((dp) => {

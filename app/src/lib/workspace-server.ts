@@ -2,12 +2,8 @@ import { mkdir } from "fs/promises";
 import { extname, join, normalize, resolve } from "path";
 
 export const WORKSPACE_SUBDIRS = [
-  "raw",
-  "workspace",
+  "input",
   "output",
-  "assets",
-  "transcripts",
-  "plans",
 ] as const;
 
 export const SESSIONS_ROOT = resolve(process.cwd(), "../sessions");

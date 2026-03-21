@@ -456,27 +456,33 @@ Create a structured plan before executing. Save to `plans/`:
 
 ## File Conventions
 
+Each session has a simple workspace:
+
 ```
-workspace/
-  raw/           <- Source files (never modify)
-  workspace/     <- Working copies, intermediate results
-  output/        <- Final rendered videos
-  assets/        <- Generated assets (SFX, music, B-Roll, AI video clips)
-  transcripts/   <- Transcriptions
-  plans/         <- Cut plans as JSON
-public/
-  jobs/{jobId}/  <- Transcription artifacts (aligned.json, result.json)
-out/
-  jobs/{jobId}/  <- Rendered subtitle previews
-  OuttakeMotion.mp4  <- Rendered motion graphics
-src/
-  OuttakesCaption.tsx  <- Subtitle Remotion component
-  OuttakeMotion.tsx    <- Motion graphics Remotion component
-  Root.tsx             <- Remotion composition registry
-  index.ts             <- Remotion entry point
-skills/
-  video-gen/     <- Wan 2.6 video generation (scripts, references)
-  sound-effects/ <- ElevenLabs SFX (references, templates)
-services/
-  ffmpeg_mcp/    <- MCP server (probe, cut, concat, transcode, mix_sfx, etc.)
+<workspace>/
+  input/    <- Source files uploaded by the user (NEVER modify originals)
+  output/   <- ALL results go here (cuts, renders, subtitles, motion graphics, SFX, generated videos)
+```
+
+### Output rules
+
+**ALL output files MUST go to `<workspace>/output/`.** Never save results to:
+- `out/` at project root
+- `public/jobs/` at project root
+- Any other directory outside the workspace
+
+For Remotion renders: `npx remotion render ... <workspace>/output/<filename>.mp4`
+For transcription: copy aligned.json to `<workspace>/output/` after generation
+For SFX: save to `<workspace>/output/`
+For video generation: save to `<workspace>/output/`
+
+The workspace path is injected at runtime — check "Your Workspace" at the end of the system prompt.
+
+### Project-level directories (for reference)
+
+```
+src/               <- Remotion components (OuttakesCaption.tsx, OuttakeMotion.tsx, Root.tsx)
+public/            <- Remotion static files (temporary, for rendering only)
+skills/            <- Skill scripts and references
+services/ffmpeg_mcp/ <- MCP server
 ```

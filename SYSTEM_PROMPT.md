@@ -410,4 +410,21 @@ Subject + Scene + Motion + Lighting + Lens + Style
 
 ## File Conventions
 
-All work happens in the workspace directory. The exact absolute path is provided at the end of this prompt as "Your Workspace". Always use those absolute paths — never guess or hardcode workspace locations.
+Your workspace has two directories:
+
+```
+<workspace>/
+  input/    <- Source files uploaded by the user (NEVER modify originals)
+  output/   <- ALL results go here
+```
+
+**The exact absolute paths are provided at the end of this prompt as "Your Workspace". Always use those absolute paths.**
+
+### Output rules
+
+- **ALL output files** (cuts, renders, subtitles, motion graphics, SFX, generated videos) go to `<workspace>/output/`
+- Never save results outside the workspace — not to `out/`, not to `public/`, not to project root
+- For Remotion renders: use `--output <workspace>/output/<filename>.mp4`
+- For transcription artifacts (aligned.json): save to `<workspace>/output/`
+- For generated SFX: save to `<workspace>/output/`
+- Copy source videos to Remotion `public/` only temporarily for rendering, output always goes to workspace

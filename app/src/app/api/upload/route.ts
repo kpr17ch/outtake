@@ -27,12 +27,12 @@ export async function POST(req: Request) {
       return Response.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const rawDir = resolveWorkspaceEntryPath(workspace!.workspacePath, "raw");
-    if (!rawDir) {
+    const inputDir = resolveWorkspaceEntryPath(workspace!.workspacePath, "input");
+    if (!inputDir) {
       return Response.json({ error: "Invalid workspace path" }, { status: 500 });
     }
 
-    await mkdir(rawDir, { recursive: true });
+    await mkdir(inputDir, { recursive: true });
 
     const results = [];
 
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       }
 
       const safeName = sanitizeUploadedFilename(file.name);
-      const filePath = join(rawDir, safeName);
+      const filePath = join(inputDir, safeName);
 
       const buffer = Buffer.from(await file.arrayBuffer());
       await writeFile(filePath, buffer);
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       results.push({
         filename: safeName,
         originalName: file.name,
-        path: `raw/${safeName}`,
+        path: `input/${safeName}`,
         size: file.size,
         type: file.type,
       });
