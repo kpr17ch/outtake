@@ -1,6 +1,6 @@
 # core/ — Engine and Subsystems
 
-This is the main package of Outtake Edit Core. It contains the `EditEngine` orchestrator and all subsystem packages (domain, ops, history, serialization).
+This is the main package of Outtake Edit Core. It contains the `EditEngine` orchestrator and all subsystem packages (domain, ops, history, serialization, storage).
 
 ## Package Structure
 
@@ -13,7 +13,9 @@ core/
 │   └── docs.md
 ├── history/               # Undo/redo, operation log, checkpoints
 │   └── docs.md
-└── serialization/         # JSON/YAML persistence, schema migration
+├── serialization/         # JSON/YAML persistence, schema migration
+│   └── docs.md
+└── storage/               # SQLite + content-addressable persistence adapters
     └── docs.md
 ```
 
@@ -26,6 +28,7 @@ engine.py → ops, history, events
 ops       → domain
 history   → domain, ops.base
 serialization → domain
+storage   → domain, history
 events    → (no domain dependency)
 ```
 
@@ -50,6 +53,7 @@ Components owned by the engine:
 - `UndoRedoController` — done/undone stacks with full state snapshots
 - `CheckpointStore` — periodic state snapshots
 - `DomainEventBus` — event emission
+- `ProjectStore` *(optional)* — persists state/history/checkpoints to SQLite
 
 ### `__init__.py`
 

@@ -45,6 +45,7 @@ EditEngine.apply()
 | `core/ops/` | Operation framework: base class, registry, validation, built-in ops | [core/ops/docs.md](core/ops/docs.md) |
 | `core/history/` | Undo/redo with snapshot restore, operation log, checkpoints | [core/history/docs.md](core/history/docs.md) |
 | `core/serialization/` | JSON/YAML serialization, schema migration | [core/serialization/docs.md](core/serialization/docs.md) |
+| `core/storage/` | Persistence adapters (SQLite ProjectStore + CAS ContentStore) | [core/storage/docs.md](core/storage/docs.md) |
 | `core/engine.py` | Central orchestrator (`EditEngine`) | documented below |
 | `events/` | Domain event bus for external observers | [events/docs.md](events/docs.md) |
 | `schemas/` | JSON Schema contracts | [schemas/docs.md](schemas/docs.md) |
@@ -88,6 +89,7 @@ The `EditEngine` class is the sole entry point for all state mutations. It compo
 | `OperationLog` | Append-only audit trail of forward operations |
 | `UndoRedoController` | Done/undone stacks with full state snapshots for restore |
 | `CheckpointStore` | Periodic full-state snapshots |
+| `ProjectStore` *(optional)* | Persists state/logs/undo/checkpoints to SQLite |
 | `DomainEventBus` | Notifies external observers |
 
 ### `apply(operation, state)`

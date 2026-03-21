@@ -19,4 +19,4 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["core", "core.domain", "core.ops", "core.history", "core.serialization", "events"]
+packages = ["core", "core.domain", "core.ops", "core.history", "core.serialization", "core.storage", "events"]

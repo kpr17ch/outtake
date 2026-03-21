@@ -55,3 +55,47 @@ class UndoRedoController:
 
     def can_redo(self) -> bool:
         return bool(self._undone)
+
+    def to_persistable(self) -> tuple[list[dict], list[dict]]:
+        done = [self._entry_to_dict(item) for item in self._done]
+        undone = [self._entry_to_dict(item) for item in self._undone]
+        return done, undone
+
+    @classmethod
+    def from_persistable(
+        cls, done: list[dict] | None, undone: list[dict] | None
+    ) -> "UndoRedoController":
+        controller = cls()
+        for item in done or []:
+            controller._done.append(cls._entry_from_dict(item))
+        for item in undone or []:
+            controller._undone.append(cls._entry_from_dict(item))
+        return controller
+
+    @staticmethod
+    def _entry_to_dict(item: UndoEntry) -> dict:
+        return {
+            "op_id": item.op_id,
+            "inverse_op": {
+                "op_type": item.inverse_op.op_type,
+                "actor": item.inverse_op.actor,
+                "payload": item.inverse_op.payload,
+                "op_id": item.inverse_op.op_id,
+                "ts": item.inverse_op.ts,
+                "preconditions": item.inverse_op.preconditions,
+                "causation_id": item.inverse_op.causation_id,
+                "correlation_id": item.inverse_op.correlation_id,
+            },
+            "state_snapshot": item.state_snapshot,
+            "redo_snapshot": item.redo_snapshot,
+        }
+
+    @staticmethod
+    def _entry_from_dict(payload: dict) -> UndoEntry:
+        inverse = BaseOperation(**payload["inverse_op"])
+        return UndoEntry(
+            op_id=payload["op_id"],
+            inverse_op=inverse,
+            state_snapshot=payload.get("state_snapshot", {}),
+            redo_snapshot=payload.get("redo_snapshot", {}),
+        )

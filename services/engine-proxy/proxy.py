@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from core.engine import EditEngine
 from core.ops.mcp_tool_op import McpToolOperation
+from core.storage.cas import ContentStore
+from core.storage.project_store import ProjectStore
 from operation_factory import OperationFactory
 from tool_registry import ToolRegistry
 
@@ -24,10 +27,19 @@ class ProxyResponse:
 
 
 class EngineProxy:
-    def __init__(self, engine: EditEngine, state, clients: dict[str, UpstreamMcpClient]) -> None:
+    def __init__(
+        self,
+        engine: EditEngine,
+        state,
+        clients: dict[str, UpstreamMcpClient],
+        store: ProjectStore | None = None,
+        content_store: ContentStore | None = None,
+    ) -> None:
         self.engine = engine
         self.state = state
         self.clients = clients
+        self.store = store
+        self.content_store = content_store
         self.registry = ToolRegistry()
         self.operation_factory = OperationFactory()
 
@@ -55,10 +67,23 @@ class EngineProxy:
         origin_ref_id = arguments.get("origin_ref_id")
         output_ref_id = result.get("output_ref_id")
         if output_file and origin_ref_id and output_ref_id:
+            cas_hash: str | None = None
+            if self.content_store is not None:
+                cas_hash = self.content_store.put(Path(output_file))
             self.state.file_versions.register_version(
                 origin_ref_id=origin_ref_id,
                 ref_id=output_ref_id,
                 file_path=output_file,
                 created_by_op_id=operation.op_id,
             )
+            if self.store is not None:
+                active_version = self.state.file_versions.get_active_version(origin_ref_id)
+                self.store.register_file(
+                    ref_id=output_ref_id,
+                    origin_ref_id=origin_ref_id,
+                    file_path=output_file,
+                    cas_hash=cas_hash,
+                    version=active_version.version,
+                    op_id=operation.op_id,
+                )
         return ProxyResponse(result=result, operation=operation)

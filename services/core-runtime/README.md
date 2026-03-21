@@ -2,7 +2,7 @@
 
 Deterministic, extensible edit-core for AI-first video timeline editing.
 
-Outtake Edit Core is the "operating system" between the AI-brain and the video editing modules. It owns the single source of truth for timeline state, enforces a typed operation pipeline, and provides full undo/redo through inverse operations — comparable to how Cursor manages code edits, but for video.
+Outtake Edit Core is the "operating system" between the AI-brain and the video editing modules. It owns the single source of truth for timeline state, enforces a typed operation pipeline, and provides full undo/redo through snapshot-based restore — comparable to how Cursor manages code edits, but for video.
 
 ---
 
@@ -47,6 +47,17 @@ Outtake Edit Core is the "operating system" between the AI-brain and the video e
 4. **Snapshot-based Undo/Redo** — Full state snapshots are stored before each operation. Undo/redo restores the complete `EditGraphState` from the snapshot, making it robust for any operation type including dynamic MCP tool operations.
 5. **Explicit Schema Migration** — Version mismatches raise `SchemaMigrationRequired` instead of silently upgrading.
 6. **Dynamic MCP Operations** — External tools (ffmpeg, whisperx, etc.) are tracked via generic `McpToolOperation` — no predefined Python class per tool needed.
+
+---
+
+## Persistence Layer (SQLite + CAS)
+
+This runtime now includes an optional persistence layer under `core/storage/`:
+
+- **`ProjectStore`** stores state, operation history, undo/redo snapshots, checkpoints, and file-version metadata in SQLite (`project.outtake`).
+- **`ContentStore`** stores generated media in a content-addressable layout under `.cas/` using SHA-256 hashes.
+
+This keeps in-memory behavior deterministic while enabling durable project recovery.
 
 ---
 
@@ -300,11 +311,12 @@ An exhaustive audit with 63 test cases uncovered and fixed **6 bugs** in the ini
 |----------|-------|---------|
 | Contract | 2 | Schema validation against `operation.schema.json` and `edit_graph.schema.json` |
 | Replay | 1 | Deterministic `state_hash` after identical operation sequences |
-| Integration | 1 | Full engine pipeline: log + events |
+| Integration | 2 | Full engine pipeline and persistence roundtrip |
 | Unit (original) | 3 | Basic insert/trim operations and undo |
 | Unit (deep audit) | 47 | Exhaustive tests for all components: RationalTime, capabilities, asset registry, validator, engine pipeline, undo/redo, state hash, checkpoints, event bus, registry, migrations, serializer roundtrip |
 | Unit (edge cases) | 9 | Delete+undo position restore, auto-generated clip IDs, multi-track, hash-after-roundtrip, restore-only-clip-v1 |
-| **Total** | **63** | All passing |
+| Unit (persistence) | 2 | SQLite `ProjectStore` behavior and CAS storage behavior |
+| **Total** | **70** | All passing |
 
 ---
 
@@ -317,6 +329,7 @@ Outtake/
 │   ├── ops/                    # Operation framework: base, registry, validation, built-in ops
 │   ├── history/                # Undo/redo with snapshot restore, operation log, checkpoints
 │   ├── serialization/          # JSON/YAML serialization, schema migration
+│   ├── storage/                # SQLite + CAS persistence adapters
 │   └── engine.py               # Central orchestrator (EditEngine)
 ├── events/                     # Domain event bus for external observers
 ├── schemas/                    # JSON Schema contracts for state and operations

@@ -12,6 +12,9 @@ if str(ROOT) not in sys.path:
 from core.domain.assets import AssetRegistry
 from core.domain.state import EditGraphState
 from core.engine import EditEngine
+from core.serialization.serializer import StateSerializer
+from core.storage.cas import ContentStore
+from core.storage.project_store import ProjectStore
 from proxy import EngineProxy, UpstreamMcpClient
 
 
@@ -24,25 +27,44 @@ class NullMcpClient(UpstreamMcpClient):
         return {"status": "noop"}
 
 
-def build_state() -> EditGraphState:
-    return EditGraphState(
-        project_meta={"name": "engine-proxy"},
-        tracks=[],
-        entities={},
-        asset_registry=AssetRegistry(),
-        schema_version="1.0.0",
-    )
+def load_or_create_project(project_dir: Path) -> tuple[EditEngine, EditGraphState, ProjectStore, ContentStore]:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    store = ProjectStore(project_dir / "project.outtake")
+    content_store = ContentStore(project_dir)
+    snapshot = store.load_state()
+    if snapshot is not None:
+        state = StateSerializer(target_schema_version=snapshot["schema_version"]).from_mapping(snapshot)
+    else:
+        state = EditGraphState(
+            project_meta={"name": "engine-proxy"},
+            tracks=[],
+            entities={},
+            asset_registry=AssetRegistry(),
+            schema_version="1.0.0",
+        )
+        store.save_state(state)
+    done, undone = store.load_undo_stack()
+    engine = EditEngine(store=store)
+    if done or undone:
+        engine.undo_redo = engine.undo_redo.from_persistable(done, undone)
+    return engine, state, store, content_store
 
 
 def run_stdio() -> None:
-    engine = EditEngine()
-    state = build_state()
+    project_dir = Path("/workspace/project")
+    engine, state, store, content_store = load_or_create_project(project_dir)
     clients: dict[str, UpstreamMcpClient] = {
         "ffmpeg": NullMcpClient(),
         "whisperx": NullMcpClient(),
         "media-gen": NullMcpClient(),
     }
-    proxy = EngineProxy(engine=engine, state=state, clients=clients)
+    proxy = EngineProxy(
+        engine=engine,
+        state=state,
+        clients=clients,
+        store=store,
+        content_store=content_store,
+    )
     proxy.discover_tools()
 
     for raw in sys.stdin:
@@ -71,6 +93,25 @@ def run_stdio() -> None:
                 result = [entry.__dict__ for entry in engine.log.entries()]
             elif method == "engine/get_state":
                 result = state.canonical_dict()
+            elif method == "engine/save":
+                store.save_state(state)
+                result = {"status": "ok"}
+            elif method == "engine/load":
+                params = req.get("params", {})
+                selected = Path(params.get("project_dir", "/workspace/project"))
+                engine, state, store, content_store = load_or_create_project(selected)
+                proxy = EngineProxy(
+                    engine=engine,
+                    state=state,
+                    clients=clients,
+                    store=store,
+                    content_store=content_store,
+                )
+                proxy.discover_tools()
+                result = {"status": "ok"}
+            elif method == "engine/get_file_versions":
+                params = req.get("params", {})
+                result = store.list_file_versions(params.get("origin_ref_id"))
             else:
                 raise KeyError(f"Unknown method: {method}")
             out = {"id": request_id, "result": result}

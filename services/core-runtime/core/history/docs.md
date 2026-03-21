@@ -68,6 +68,8 @@ Manages two stacks: `_done` (undo-able) and `_undone` (redo-able).
 - `pop_undo()` → moves top of `_done` to `_undone`, returns the entry
 - `pop_redo()` → moves top of `_undone` to `_done`, returns the entry
 - `can_undo()` / `can_redo()` → bool checks
+- `to_persistable()` → exports done/undone stacks as serializable dict lists
+- `from_persistable(done, undone)` → reconstructs stacks from persisted dict payloads
 
 Undo/redo works by restoring the full `EditGraphState` from the stored snapshot, making it robust for any operation type — including dynamically generated MCP tool operations.
 

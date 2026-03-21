@@ -10,16 +10,18 @@ from core.history.undo_redo import UndoRedoController
 from core.ops.base import BaseOperation, PreApplyContext
 from core.ops.validator import OperationValidator
 from core.serialization.serializer import StateSerializer
+from core.storage.project_store import ProjectStore
 from events.bus import DomainEvent, DomainEventBus
 
 
 class EditEngine:
-    def __init__(self) -> None:
+    def __init__(self, store: ProjectStore | None = None) -> None:
         self.validator = OperationValidator()
         self.log = OperationLog()
         self.undo_redo = UndoRedoController()
         self.checkpoints = CheckpointStore()
         self.events = DomainEventBus()
+        self.store = store
         self._applied_count = 0
 
     def _capture_pre_context(
@@ -69,10 +71,19 @@ class EditEngine:
             state_snapshot=state_snapshot_before,
             redo_snapshot=state.canonical_dict(),
         )
+        if self.store is not None:
+            self.store.save_operation(self.log.entries()[-1])
+            self.store.save_state(state)
+            done, undone = self.undo_redo.to_persistable()
+            self.store.save_undo_stack(done, undone)
         self._applied_count += 1
         checkpoint_id = self.checkpoints.maybe_create(
             self._applied_count, operation.op_type, state
         )
+        if checkpoint_id and self.store is not None:
+            nearest = self.checkpoints.nearest()
+            if nearest is not None:
+                self.store.save_snapshot(nearest[0], nearest[1])
         self.events.emit(
             DomainEvent(
                 event_type="StateChanged",
@@ -90,6 +101,10 @@ class EditEngine:
     def undo(self, state: EditGraphState) -> None:
         entry = self.undo_redo.pop_undo()
         self._restore_state_from_snapshot(state, entry.state_snapshot)
+        if self.store is not None:
+            self.store.save_state(state)
+            done, undone = self.undo_redo.to_persistable()
+            self.store.save_undo_stack(done, undone)
         self.events.emit(
             DomainEvent(event_type="UndoPerformed", payload={"op_id": entry.op_id})
         )
@@ -97,6 +112,10 @@ class EditEngine:
     def redo(self, state: EditGraphState) -> None:
         entry = self.undo_redo.pop_redo()
         self._restore_state_from_snapshot(state, entry.redo_snapshot)
+        if self.store is not None:
+            self.store.save_state(state)
+            done, undone = self.undo_redo.to_persistable()
+            self.store.save_undo_stack(done, undone)
         self.events.emit(
             DomainEvent(event_type="RedoPerformed", payload={"op_id": entry.op_id})
         )
