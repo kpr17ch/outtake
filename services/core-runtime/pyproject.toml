@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "outtake-edit-core"
+version = "0.1.0"
+description = "Deterministic edit-core for AI-first video timeline operations."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "PyYAML>=6.0.1",
+  "jsonschema>=4.23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+]
+
+[tool.setuptools]
+packages = ["core", "core.domain", "core.ops", "core.history", "core.serialization", "core.storage", "events"]

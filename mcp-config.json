@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ffmpeg": {
+      "type": "url",
+      "url": "http://localhost:8100/mcp"
+    }
+  }
+}

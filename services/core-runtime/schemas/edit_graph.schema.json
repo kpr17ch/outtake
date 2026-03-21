@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://outtake.dev/schemas/edit_graph.schema.json",
+  "title": "EditGraphState",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_meta",
+    "tracks",
+    "entities",
+    "asset_registry",
+    "file_versions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "project_meta": {
+      "type": "object"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/track"
+      }
+    },
+    "entities": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/timelineEntity"
+      }
+    },
+    "asset_registry": {
+      "$ref": "#/$defs/assetRegistry"
+    },
+    "file_versions": {
+      "$ref": "#/$defs/fileVersionStore"
+    }
+  },
+  "$defs": {
+    "rationalTime": {
+      "type": "object",
+      "required": ["value", "rate"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "integer" },
+        "rate": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "timeRange": {
+      "type": "object",
+      "required": ["start", "duration"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "$ref": "#/$defs/rationalTime" },
+        "duration": { "$ref": "#/$defs/rationalTime" }
+      }
+    },
+    "timelineEntity": {
+      "type": "object",
+      "required": ["id", "kind", "schema_version", "attributes", "enabled"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "schema_version": { "type": "string" },
+        "attributes": { "type": "object" },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "track": {
+      "type": "object",
+      "required": ["id", "kind", "schema_version", "attributes", "enabled", "track_type", "item_ids", "locked", "muted", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "schema_version": { "type": "string" },
+        "attributes": { "type": "object" },
+        "enabled": { "type": "boolean" },
+        "track_type": { "enum": ["video", "audio", "subtitle"] },
+        "item_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "locked": { "type": "boolean" },
+        "muted": { "type": "boolean" },
+        "name": { "type": "string" }
+      }
+    },
+    "mediaReference": {
+      "type": "object",
+      "required": ["ref_id", "kind", "metadata"],
+      "properties": {
+        "ref_id": { "type": "string" },
+        "kind": { "type": "string" },
+        "format_hint": { "type": ["string", "null"] },
+        "file_path": { "type": ["string", "null"] },
+        "available_range": {
+          "anyOf": [
+            { "$ref": "#/$defs/timeRange" },
+            { "type": "null" }
+          ]
+        },
+        "metadata": { "type": "object" }
+      }
+    },
+    "assetRegistry": {
+      "type": "object",
+      "required": ["assets"],
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/mediaReference"
+          }
+        }
+      }
+    },
+    "fileVersion": {
+      "type": "object",
+      "required": ["ref_id", "origin_ref_id", "file_path", "version", "created_by_op_id"],
+      "additionalProperties": false,
+      "properties": {
+        "ref_id": { "type": "string" },
+        "origin_ref_id": { "type": "string" },
+        "file_path": { "type": "string" },
+        "version": { "type": "integer", "minimum": 1 },
+        "created_by_op_id": { "type": "string" }
+      }
+    },
+    "fileVersionStore": {
+      "type": "object",
+      "required": ["versions", "active"],
+      "additionalProperties": false,
+      "properties": {
+        "versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/fileVersion" }
+          }
+        },
+        "active": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    }
+  }
+}

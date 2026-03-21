@@ -19,6 +19,8 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
+      const projectRoot = resolve(process.cwd(), "..");
+
       const args = [
         "-p",
         message,
@@ -38,7 +40,10 @@ export async function POST(req: Request) {
         "--disable-slash-commands",
         // System prompt: replace entirely with Outtake-specific prompt
         "--system-prompt-file",
-        resolve(process.cwd(), "../SYSTEM_PROMPT.md"),
+        resolve(projectRoot, "SYSTEM_PROMPT.md"),
+        // Connect to FFmpeg MCP server for video editing tools
+        "--mcp-config",
+        resolve(projectRoot, "mcp-config.json"),
       ];
 
       if (claudeSessionId) {
