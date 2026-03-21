@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Preview, { type PreviewHandle } from "@/components/Preview";
-import Timeline, { type Marker } from "@/components/Timeline";
+import Timeline, { type Marker, type TimelineTrack } from "@/components/Timeline";
 import ChatPanel from "@/components/ChatPanel";
 import { useChat } from "@/lib/useChat";
 import type { Session } from "@/lib/types";
 import type { MediaItem } from "@/components/MediaBin";
 
-// Dynamic import to avoid SSR hydration mismatch
 const MediaBin = dynamic(() => import("@/components/MediaBin"), { ssr: false });
 
 export default function Home() {
@@ -56,7 +55,7 @@ export default function Home() {
   const [activeMedia, setActiveMedia] = useState<MediaItem | null>(null);
   const previewRef = useRef<PreviewHandle>(null);
 
-  // ─── Playback state ───
+  // ─── Playback ───
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -88,6 +87,43 @@ export default function Home() {
     setDuration(0);
     setIsPlaying(false);
   }, [activeMedia]);
+
+  // ─── Build timeline tracks from active media ───
+  const tracks: TimelineTrack[] = useMemo(() => {
+    if (!activeMedia || activeMedia.kind !== "video" || duration <= 0) return [];
+    return [
+      {
+        id: "v1",
+        type: "video",
+        label: "V1",
+        clips: [{
+          id: `clip-${activeMedia.path}`,
+          name: activeMedia.name,
+          sourceIn: 0,
+          sourceOut: duration,
+        }],
+      },
+      {
+        id: "a1",
+        type: "audio",
+        label: "A1",
+        clips: [{
+          id: `audio-${activeMedia.path}`,
+          name: "Audio",
+          sourceIn: 0,
+          sourceOut: duration,
+        }],
+      },
+    ];
+  }, [activeMedia, duration]);
+
+  // ─── Auto-load new agent output ───
+  const handleNewOutput = useCallback((item: MediaItem) => {
+    // Automatically switch to new agent output
+    if (item.kind === "video") {
+      setActiveMedia(item);
+    }
+  }, []);
 
   // ─── Keyboard shortcuts ───
   useEffect(() => {
@@ -152,14 +188,16 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
-      {/* ─── Top: Media Bin + Preview ─── */}
+      {/* Top: Media Bin + Preview */}
       <div className="flex flex-1 min-h-0">
-        {/* Media Bin */}
         <div className="shrink-0" style={{ width: 200 }}>
-          <MediaBin sessionId={sessionId} activeItem={activeMedia} onSelect={setActiveMedia} />
+          <MediaBin
+            sessionId={sessionId}
+            activeItem={activeMedia}
+            onSelect={setActiveMedia}
+            onNewOutput={handleNewOutput}
+          />
         </div>
-
-        {/* Preview */}
         <div className="flex-1 min-w-0">
           <Preview
             ref={previewRef}
@@ -171,21 +209,21 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ─── Middle: Timeline ─── */}
+      {/* Timeline */}
       <Timeline
         duration={duration}
         currentTime={currentTime}
         isPlaying={isPlaying}
         markers={markers}
+        tracks={tracks}
         onSeek={handleSeek}
         onTogglePlay={() => previewRef.current?.toggle()}
         onSetIn={handleSetIn}
         onSetOut={handleSetOut}
         onClearMarkers={handleClearMarkers}
-        videoName={activeMedia?.kind === "video" ? activeMedia.name : null}
       />
 
-      {/* ─── Bottom: Chat ─── */}
+      {/* Chat */}
       <div className="shrink-0" style={{ height: "35%", minHeight: 200, borderTop: "1px solid var(--border-subtle)" }}>
         <ChatPanel
           activeSessionId={sessionId}
