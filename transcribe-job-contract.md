@@ -1,8 +1,8 @@
-# Subtitle Job Contract
+# Transcribe Job Contract
 
 ## Purpose
 
-Defines the stable input/output contract between your web app and `subtitle-pipeline.mjs`.
+Defines the stable input/output contract between your web app and `transcribe-pipeline.mjs`.
 
 ## Prerequisites
 

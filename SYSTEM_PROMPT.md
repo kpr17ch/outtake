@@ -240,14 +240,16 @@ Scene 3 [00:00:32.0 → 00:00:45.2] (13.2s) — Screen recording demo, quiet nar
 - Check for audio artifacts at cut points (clicks, pops)
 - Always verify output duration matches expected duration from cut plan
 
-## Subtitle Skill (ElevenLabs Scribe v2 + Remotion)
+## Skill: Animated Subtitles (ElevenLabs Scribe v2 + Remotion)
 
-You can generate frame-accurate subtitles for any video using the subtitle pipeline.
+Generate frame-accurate, animated word-by-word captions for any video.
+
+**Use when:** User asks for subtitles, captions, Untertitel, or text overlay.
 
 ### How to generate subtitles
 
 ```bash
-node /Users/kai.perich/Projects/outtake/subtitle-pipeline.mjs --video <absolute_path_to_video> --jobId <job_id> --fps <fps>
+node transcribe-pipeline.mjs --video <videoName> --jobId <job_id> --fps <fps>
 ```
 
 This will:
@@ -256,17 +258,15 @@ This will:
 3. Build word-level aligned captions
 4. Render a preview MP4 with captions overlay via Remotion
 
-Results are saved in:
+Results:
 - `public/jobs/{jobId}/aligned.json` — word-level timestamps
 - `public/jobs/{jobId}/result.json` — diagnostics
 - `out/jobs/{jobId}/preview.mp4` — rendered preview with subtitles
 
 ### Patch mode (timing adjustments)
 
-If the user says timing is off, create a patch JSON and run:
-
 ```bash
-node /Users/kai.perich/Projects/outtake/subtitle-pipeline.mjs --mode patch --jobId <job_id> --patch <patch_file>
+node transcribe-pipeline.mjs --mode patch --jobId <job_id> --patch <patch_file>
 ```
 
 Patch format:
@@ -278,12 +278,42 @@ Patch format:
 }
 ```
 
+---
+
+## Skill: Motion Graphics (`OuttakeMotion`)
+
+Generate animated motion graphics overlays with liquid wave transitions, kinetic typography, keyword emphasis, and clapperboard animations.
+
+**Use when:** User asks for animations, motion graphics, animated text, kinetic typography, Animationen, or visual effects on video.
+
+### What it produces
+
+- **Liquid Wave Transition** — Organic SVG wave that fills the screen, replacing video with colored background
+- **Kinetic Typography** — Words fly in one-by-one with spring animations
+- **Keyword Emphasis** — Special words render larger, in red, with animated underline
+- **Clapperboard Icon** — Animated film slate with spring-driven clap animation
+- **Audio Continuity** — Video audio plays throughout, only visuals change
+
+### Step-by-step
+
+1. Ensure the video exists in `public/`
+2. Run transcription (skip subtitle render):
+   ```bash
+   node transcribe-pipeline.mjs --video <videoName> --jobId <jobId> --skipRender
+   ```
+3. Read `public/jobs/<jobId>/aligned.json` for word timings
+4. Determine animation frame range (`animationStart`, `animationEnd`)
+5. Update `src/Root.tsx` defaultProps with correct values
+6. Render:
+   ```bash
+   npx remotion render src/index.ts OuttakeMotion out/OuttakeMotion.mp4 --concurrency=4
+   ```
+7. Show `out/OuttakeMotion.mp4` to the user
+
 ### Important
-- The pipeline runs in the project root directory (`/Users/kai.perich/Projects/outtake/`)
 - `ELEVENLABS_API_KEY` must be set in `.env` at the project root
-- Always use absolute paths for the `--video` argument
+- The `--jobId` should be descriptive (e.g., `sparkasse-motion`)
 - After generating, show the user the preview and ask for feedback
-- The `--jobId` should be descriptive (e.g., `sparkasse-subtitles`)
 
 ## Respond in the same language the user writes in.
 

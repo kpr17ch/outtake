@@ -61,12 +61,12 @@ if (mode !== "full" && mode !== "patch") {
 }
 
 if (mode === "full" && !videoArg) {
-	console.error("Usage (full): node subtitle-pipeline.mjs --video VIDEO.mp4 [--jobId id] [--lang eng] [--fps 30]");
+	console.error("Usage (full): node transcribe-pipeline.mjs --video VIDEO.mp4 [--jobId id] [--lang eng] [--fps 30]");
 	process.exit(1);
 }
 
 if (mode === "patch" && (!providedJobId || !patchPath)) {
-	console.error("Usage (patch): node subtitle-pipeline.mjs --mode patch --jobId JOB_ID --patch patch.json");
+	console.error("Usage (patch): node transcribe-pipeline.mjs --mode patch --jobId JOB_ID --patch patch.json");
 	process.exit(1);
 }
 
@@ -101,7 +101,7 @@ if (mode === "patch" && !fs.existsSync(alignedPath)) {
 
 const previousResult = fs.existsSync(resultPath) ? readJson(resultPath) : null;
 
-console.log("\n=== DYNAMIC SUBTITLE PIPELINE ===");
+console.log("\n=== TRANSCRIPTION PIPELINE ===");
 console.log(`Mode: ${mode}`);
 console.log(`Job:  ${jobId}`);
 console.log(`Data: ${jobPublicDir}`);
