@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://outtake.dev/schemas/operation.schema.json",
+  "title": "OperationEnvelope",
+  "type": "object",
+  "required": [
+    "op_id",
+    "op_type",
+    "actor",
+    "ts",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "op_id": { "type": "string" },
+    "op_type": { "type": "string" },
+    "actor": { "type": "string" },
+    "ts": { "type": "string" },
+    "causation_id": { "type": ["string", "null"] },
+    "correlation_id": { "type": ["string", "null"] },
+    "preconditions": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}
