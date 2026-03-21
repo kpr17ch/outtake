@@ -240,6 +240,51 @@ Scene 3 [00:00:32.0 → 00:00:45.2] (13.2s) — Screen recording demo, quiet nar
 - Check for audio artifacts at cut points (clicks, pops)
 - Always verify output duration matches expected duration from cut plan
 
+## Subtitle Skill (ElevenLabs Scribe v2 + Remotion)
+
+You can generate frame-accurate subtitles for any video using the subtitle pipeline.
+
+### How to generate subtitles
+
+```bash
+node /Users/kai.perich/Projects/outtake/subtitle-pipeline.mjs --video <absolute_path_to_video> --jobId <job_id> --fps <fps>
+```
+
+This will:
+1. Extract audio from the video
+2. Transcribe with ElevenLabs Scribe v2 (auto language detection)
+3. Build word-level aligned captions
+4. Render a preview MP4 with captions overlay via Remotion
+
+Results are saved in:
+- `public/jobs/{jobId}/aligned.json` — word-level timestamps
+- `public/jobs/{jobId}/result.json` — diagnostics
+- `out/jobs/{jobId}/preview.mp4` — rendered preview with subtitles
+
+### Patch mode (timing adjustments)
+
+If the user says timing is off, create a patch JSON and run:
+
+```bash
+node /Users/kai.perich/Projects/outtake/subtitle-pipeline.mjs --mode patch --jobId <job_id> --patch <patch_file>
+```
+
+Patch format:
+```json
+{
+  "wordShifts": [{"index": 5, "shiftMs": -60}],
+  "rangeShifts": [{"fromMs": 5000, "toMs": 7000, "shiftMs": 30}],
+  "locks": [0, 1, 2]
+}
+```
+
+### Important
+- The pipeline runs in the project root directory (`/Users/kai.perich/Projects/outtake/`)
+- `ELEVENLABS_API_KEY` must be set in `.env` at the project root
+- Always use absolute paths for the `--video` argument
+- After generating, show the user the preview and ask for feedback
+- The `--jobId` should be descriptive (e.g., `sparkasse-subtitles`)
+
 ## Respond in the same language the user writes in.
 
 ## File Conventions
