@@ -23,16 +23,16 @@ The core owns no media data — it manages logical references, timeline structur
 ## Data Flow
 
 ```
-Operation (from AI/UI)
+Operation (from AI/UI/MCP)
   │
   ▼
 EditEngine.apply()
   ├── 1. OperationValidator.validate()     → reject or continue
-  ├── 2. _capture_pre_context()            → snapshot for inverse
-  ├── 3. OperationApplier.apply()          → mutate EditGraphState
-  ├── 4. InverseBuilder.build()            → create inverse operation
+  ├── 2. _capture_pre_context()            → full state snapshot
+  ├── 3. operation.apply(state)            → mutate EditGraphState
+  ├── 4. operation.inverse(pre_context)    → create inverse operation
   ├── 5. OperationLog.append()             → append-only audit trail
-  ├── 6. UndoRedoController.record()       → push inverse to undo stack
+  ├── 6. UndoRedoController.record()       → push snapshots to undo stack
   ├── 7. CheckpointStore.maybe_create()    → periodic full-state snapshot
   └── 8. DomainEventBus.emit()             → notify all observers
 ```
@@ -43,12 +43,11 @@ EditEngine.apply()
 |-----------|---------|---------|
 | `core/domain/` | Data model: time, entities, assets, state | [core/domain/docs.md](core/domain/docs.md) |
 | `core/ops/` | Operation framework: base class, registry, validation, built-in ops | [core/ops/docs.md](core/ops/docs.md) |
-| `core/history/` | Undo/redo, operation log, checkpoints, inverse builder | [core/history/docs.md](core/history/docs.md) |
+| `core/history/` | Undo/redo with snapshot restore, operation log, checkpoints | [core/history/docs.md](core/history/docs.md) |
 | `core/serialization/` | JSON/YAML serialization, schema migration | [core/serialization/docs.md](core/serialization/docs.md) |
 | `core/engine.py` | Central orchestrator (`EditEngine`) | documented below |
 | `events/` | Domain event bus for external observers | [events/docs.md](events/docs.md) |
 | `schemas/` | JSON Schema contracts | [schemas/docs.md](schemas/docs.md) |
-| `plugins/` | Extension point for custom operations | [plugins/docs.md](plugins/docs.md) |
 | `tests/` | Test pyramid | [tests/docs.md](tests/docs.md) |
 
 ## Root Files
@@ -58,7 +57,6 @@ Python package configuration. Defines:
 - Package name: `outtake-edit-core`
 - Dependencies: `PyYAML`, `jsonschema`
 - Dev dependencies: `pytest`
-- Entry points: `outtake.operation_plugins` — external plugins register here
 - Package list for `setuptools`
 
 ### `requirements.txt`
@@ -80,9 +78,6 @@ Developer shortcuts:
 - `make contract-test` — run contract tests
 - `make replay-test` — run replay tests
 
-### `.env.example`
-Template for environment variables. Currently only `OUTTAKE_ENV=development`.
-
 ## `core/engine.py` — EditEngine
 
 The `EditEngine` class is the sole entry point for all state mutations. It composes all subsystems:
@@ -90,22 +85,20 @@ The `EditEngine` class is the sole entry point for all state mutations. It compo
 | Component | Role |
 |-----------|------|
 | `OperationValidator` | Validates operations against state invariants |
-| `OperationApplier` | Pure function that calls `operation.apply(state)` |
-| `InverseBuilder` | Calls `operation.inverse(pre_context)` |
 | `OperationLog` | Append-only audit trail of forward operations |
-| `UndoRedoController` | Done/undone stacks of inverse operations |
+| `UndoRedoController` | Done/undone stacks with full state snapshots for restore |
 | `CheckpointStore` | Periodic full-state snapshots |
 | `DomainEventBus` | Notifies external observers |
 
 ### `apply(operation, state)`
-The 6-step pipeline: validate → pre-context → apply → inverse → log → events.
+The pipeline: validate → pre-context → apply → inverse → log → snapshot-record → events.
 Raises `ValueError` and emits `OperationRejected` if validation fails.
 
-### `undo(state)`
-Pops the last inverse operation from `_done`, applies it, emits `UndoPerformed`.
+### `undo(state)` / `redo(state)`
+Snapshot-based: restores the full `EditGraphState` from the stored snapshot dict. Works for any operation type including dynamically generated MCP tool operations.
 
 ### `_capture_pre_context(operation, state)`
-Builds a `PreApplyContext` snapshot based on `op_type`:
+Builds a `PreApplyContext` snapshot including the full `state.canonical_dict()`. Additional op-type-specific data:
 - `insert_clip`: stores the `clip_id` that will be inserted
 - `trim_clip`: stores the full clip state *before* trim
 - `delete_entity`: stores the entity data, its `track_id`, and its `position` in that track

@@ -18,8 +18,5 @@ dev = [
   "pytest>=8.2.0",
 ]
 
-[project.entry-points."outtake.operation_plugins"]
-example_plugin = "plugins.example_plugin:register_plugin"
-
 [tool.setuptools]
-packages = ["core", "core.domain", "core.ops", "core.history", "core.serialization", "events", "plugins", "plugins.example_plugin"]
+packages = ["core", "core.domain", "core.ops", "core.history", "core.serialization", "events"]

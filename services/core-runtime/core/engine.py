@@ -5,11 +5,9 @@ from dataclasses import asdict
 from core.domain.entities import Clip
 from core.domain.state import EditGraphState
 from core.history.checkpoints import CheckpointStore
-from core.history.inverse_builder import InverseBuilder
 from core.history.log import OperationLog
 from core.history.undo_redo import UndoRedoController
 from core.ops.base import BaseOperation, PreApplyContext
-from core.ops.applier import OperationApplier
 from core.ops.validator import OperationValidator
 from core.serialization.serializer import StateSerializer
 from events.bus import DomainEvent, DomainEventBus
@@ -18,8 +16,6 @@ from events.bus import DomainEvent, DomainEventBus
 class EditEngine:
     def __init__(self) -> None:
         self.validator = OperationValidator()
-        self.applier = OperationApplier()
-        self.inverse_builder = InverseBuilder()
         self.log = OperationLog()
         self.undo_redo = UndoRedoController()
         self.checkpoints = CheckpointStore()
@@ -64,8 +60,8 @@ class EditEngine:
             )
             raise ValueError(validation.reason)
         pre_context = self._capture_pre_context(operation, state)
-        delta = self.applier.apply(operation, state)
-        inverse = self.inverse_builder.build(operation, pre_context, delta)
+        delta = operation.apply(state)
+        inverse = operation.inverse(pre_context)
         self.log.append(operation)
         self.undo_redo.record(
             operation.op_id,

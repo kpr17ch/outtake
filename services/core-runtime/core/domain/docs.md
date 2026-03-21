@@ -84,12 +84,6 @@ The core never accesses physical files. It stores logical references. Actual fil
 
 ---
 
-### `resolver_protocol.py` — MediaResolver Protocol
-
-Defines `MediaResolver(Protocol)` with a single method `resolve(reference: MediaReference) -> str`. External modules implement this to resolve logical references into concrete file paths or URIs. The core never imports a concrete resolver — it only knows the protocol.
-
----
-
 ### `entities.py` — Timeline Entities
 
 **`TimelineEntity`** — abstract base for all timeline items:

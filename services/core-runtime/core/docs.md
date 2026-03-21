@@ -38,16 +38,16 @@ events    → (no domain dependency)
 The `EditEngine` is the sole entry point for all state mutations. It is documented in detail in [../docs.md](../docs.md) under "core/engine.py — EditEngine".
 
 Key methods:
-- `apply(operation, state)` — the 6-step pipeline (validate → pre-context → apply → inverse → log → events)
-- `undo(state)` — pops inverse from undo stack and applies it
+- `apply(operation, state)` — the pipeline (validate → pre-context → apply → log → snapshot-record → events)
+- `undo(state)` — restores state from stored snapshot
+- `redo(state)` — restores state from stored redo snapshot
 - `_capture_pre_context(operation, state)` — builds pre-apply snapshot
+- `_restore_state_from_snapshot(state, snapshot)` — reconstructs full state from a snapshot dict
 
 Components owned by the engine:
 - `OperationValidator` — validates operations
-- `OperationApplier` — applies operations
-- `InverseBuilder` — constructs inverse operations
 - `OperationLog` — append-only audit trail
-- `UndoRedoController` — done/undone stacks
+- `UndoRedoController` — done/undone stacks with full state snapshots
 - `CheckpointStore` — periodic state snapshots
 - `DomainEventBus` — event emission
 

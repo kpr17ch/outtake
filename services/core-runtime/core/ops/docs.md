@@ -9,8 +9,8 @@ The operations package sits between the `EditEngine` (which orchestrates) and th
 ```
 EditEngine.apply()
   ├── OperationValidator.validate(op, state)
-  ├── OperationApplier.apply(op, state)
-  └── op.inverse(pre_context) → via InverseBuilder
+  ├── operation.apply(state)          → direct call
+  └── operation.inverse(pre_context)  → direct call
 ```
 
 ---
@@ -60,8 +60,6 @@ Maps `op_type` strings to their `BaseOperation` subclasses.
 - `get(op_type) → Type[BaseOperation]` — look up by type string, raises `KeyError` if unknown
 - `build(op_type, /, **kwargs) → BaseOperation` — convenience: look up + instantiate. The `op_type` parameter is positional-only (`/`) so callers can also pass `op_type` in `**kwargs` without conflict.
 
-Used by the plugin system to register external operation types.
-
 ---
 
 ### `validator.py` — OperationValidator
@@ -74,12 +72,6 @@ Two-stage validation:
    - `trim_clip`: verifies the target clip exists and is a `Clip` instance
 
 Returns `ValidationResult(ok=False, reason=...)` on any failure.
-
----
-
-### `applier.py` — OperationApplier
-
-A thin wrapper that calls `operation.apply(state)`. Exists as a separate class to keep the engine's apply pipeline explicit and to allow future interception (logging, metrics, sandboxing).
 
 ---
 

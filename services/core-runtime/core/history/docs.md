@@ -1,6 +1,6 @@
 # core/history/ — Undo/Redo, Logging, Checkpoints
 
-This package manages everything related to edit history: the append-only operation log, the undo/redo stacks, the inverse operation builder, and periodic state checkpoints.
+This package manages everything related to edit history: the append-only operation log, the undo/redo stacks with full state snapshots, and periodic state checkpoints.
 
 ## Role in the System
 
@@ -9,17 +9,23 @@ After the `EditEngine` applies an operation, it hands the result to the history 
 ```
 EditEngine.apply()
   ├── ... (validate, pre-context, apply) ...
-  ├── InverseBuilder.build(op, pre_context, delta) → inverse_op
-  ├── OperationLog.append(op)                      → audit trail
-  ├── UndoRedoController.record(op_id, inverse_op) → undo stack
-  └── CheckpointStore.maybe_create(count, type, state) → periodic snapshot
+  ├── OperationLog.append(op)                               → audit trail
+  ├── UndoRedoController.record(op_id, inverse, snapshots)  → undo stack
+  └── CheckpointStore.maybe_create(count, type, state)      → periodic snapshot
 ```
 
-For undo:
+For undo (snapshot-based):
 ```
 EditEngine.undo()
-  ├── UndoRedoController.pop_undo() → inverse_op
-  └── OperationApplier.apply(inverse_op, state)
+  ├── UndoRedoController.pop_undo() → entry with state_snapshot
+  └── _restore_state_from_snapshot(state, entry.state_snapshot)
+```
+
+For redo:
+```
+EditEngine.redo()
+  ├── UndoRedoController.pop_redo() → entry with redo_snapshot
+  └── _restore_state_from_snapshot(state, entry.redo_snapshot)
 ```
 
 ---
@@ -33,18 +39,21 @@ EditEngine.undo()
 | Field | Type | Purpose |
 |-------|------|---------|
 | `op_id` | `str` | Unique operation ID |
-| `op_type` | `str` | Operation type ("insert_clip", etc.) |
+| `op_type` | `str` | Operation type ("insert_clip", "ffmpeg/cut_clip", etc.) |
 | `ts` | `str` | ISO timestamp |
-| `actor` | `str` | Who initiated ("ai", "user") |
+| `actor` | `str` | Who initiated ("ai", "user", "ffmpeg") |
 | `causation_id` | `str \| None` | Which operation caused this one |
 | `correlation_id` | `str \| None` | Links related operations |
 | `payload` | `dict` | Full operation payload |
+| `tool_schema_hash` | `str \| None` | SHA-256 of MCP tool input schema (dynamic ops only) |
+| `result_snapshot` | `dict \| None` | Tool result snapshot (dynamic ops only) |
+| `file_versions_before` | `dict \| None` | Active file refs before operation (dynamic ops only) |
 
 **`OperationLog`**:
 - `append(operation)` — creates an entry from a `BaseOperation` and appends it
 - `entries()` — returns a **copy** of the internal list (immutability guarantee)
 
-The log stores **forward operations only**. Inverse operations (used for undo) are never logged. This keeps the log clean for audit, replay, and debugging.
+The log stores **forward operations only**. Inverse operations (used for undo) are never logged.
 
 ---
 
@@ -52,33 +61,15 @@ The log stores **forward operations only**. Inverse operations (used for undo) a
 
 Manages two stacks: `_done` (undo-able) and `_undone` (redo-able).
 
-**`UndoEntry`** — pairs an `op_id` with its `inverse_op`.
+**`UndoEntry`** — pairs an `op_id` with its `inverse_op`, plus full `state_snapshot` and `redo_snapshot` dicts.
 
 **`UndoRedoController`**:
-- `record(op_id, inverse_op)` — pushes to `_done`, **clears `_undone`** (any redo history is lost when a new operation is applied — standard undo/redo behavior)
-- `pop_undo()` → moves top of `_done` to `_undone`, returns the entry. Raises `IndexError` if empty.
-- `pop_redo()` → moves top of `_undone` to `_done`, returns the entry. Raises `IndexError` if empty.
+- `record(op_id, inverse_op, state_snapshot, redo_snapshot)` — pushes to `_done`, **clears `_undone`**
+- `pop_undo()` → moves top of `_done` to `_undone`, returns the entry
+- `pop_redo()` → moves top of `_undone` to `_done`, returns the entry
 - `can_undo()` / `can_redo()` → bool checks
 
-**Stack behavior example:**
-```
-apply(insert)  → done=[insert_inv]    undone=[]
-apply(trim)    → done=[insert_inv, trim_inv]  undone=[]
-undo()         → done=[insert_inv]    undone=[trim_inv]
-undo()         → done=[]              undone=[trim_inv, insert_inv]
-redo()         → done=[insert_inv]    undone=[trim_inv]
-apply(delete)  → done=[insert_inv, delete_inv]  undone=[]  ← redo cleared!
-```
-
----
-
-### `inverse_builder.py` — InverseBuilder
-
-Thin orchestration class:
-- `build(operation, pre_context, delta) → BaseOperation`
-- Delegates to `operation.inverse(pre_context)`
-
-Exists as a separate class to allow future interception (logging, validation of inverse operations, etc.).
+Undo/redo works by restoring the full `EditGraphState` from the stored snapshot, making it robust for any operation type — including dynamically generated MCP tool operations.
 
 ---
 
@@ -91,13 +82,13 @@ Periodic full-state snapshots for faster replay recovery.
 - `on_op_types: tuple[str, ...] = ()` — create checkpoint on specific operation types
 
 **`CheckpointStore`**:
-- `maybe_create(op_index, op_type, state) → str | None` — creates a checkpoint if policy triggers. Returns checkpoint ID or `None`.
+- `maybe_create(op_index, op_type, state) → str | None` — creates a checkpoint if policy triggers
 - `nearest() → tuple[str, dict] | None` — returns the most recent checkpoint
 
-Checkpoints store `state.canonical_dict()` — the same deterministic representation used for serialization and hashing.
+Checkpoints store `state.canonical_dict()`.
 
 ---
 
 ### `__init__.py`
 
-Exports module names: `log`, `undo_redo`, `checkpoints`, `inverse_builder`.
+Exports module names: `log`, `undo_redo`, `checkpoints`.

@@ -44,9 +44,9 @@ Outtake Edit Core is the "operating system" between the AI-brain and the video e
 1. **Single Source of Truth** — `EditGraphState` holds the complete project state (tracks, entities, assets). No secondary caches.
 2. **Typed Operation Pipeline** — Every mutation passes through validate → pre-context → apply → inverse-build → log → event-emit. No bypasses.
 3. **Deterministic Replay** — The same sequence of operations on the same initial state always produces the same `state_hash` (SHA-256 over canonical JSON).
-4. **Undo/Redo via Inverse Operations** — Each forward operation builds its own inverse using a `PreApplyContext` snapshot captured *before* apply. No state cloning.
+4. **Snapshot-based Undo/Redo** — Full state snapshots are stored before each operation. Undo/redo restores the complete `EditGraphState` from the snapshot, making it robust for any operation type including dynamic MCP tool operations.
 5. **Explicit Schema Migration** — Version mismatches raise `SchemaMigrationRequired` instead of silently upgrading.
-6. **Plugin Extensibility** — New operation types register via `pyproject.toml` entry points without modifying core.
+6. **Dynamic MCP Operations** — External tools (ffmpeg, whisperx, etc.) are tracked via generic `McpToolOperation` — no predefined Python class per tool needed.
 
 ---
 
@@ -130,9 +130,9 @@ engine.apply(op, state)
 | # | Step | What happens |
 |---|------|-------------|
 | 1 | **Validate** | `OperationValidator` checks: required fields present? `source_out` within `available_range` of `media-001`? `source_in` < `source_out`? |
-| 2 | **Pre-Context Capture** | Engine snapshots `{"inserted_id": "clip-001"}` — needed later to build the inverse. |
+| 2 | **Pre-Context Capture** | Engine snapshots full state + `{"inserted_id": "clip-001"}` — needed for undo. |
 | 3 | **Apply** | `InsertClipOperation.apply()` creates a `Clip` entity, inserts `"clip-001"` into `track-v1.item_ids[0]`, rebuilds indices. |
-| 4 | **Inverse Build** | `InverseBuilder` calls `op.inverse(pre_context)` → returns a `DeleteEntityOperation(entity_id="clip-001")`. |
+| 4 | **Inverse Build** | `op.inverse(pre_context)` → returns a `DeleteEntityOperation(entity_id="clip-001")`. |
 | 5 | **Log** | `OperationLog` appends the forward operation (never the inverse). |
 | 6 | **Event Emit** | `DomainEventBus` emits `StateChanged` with the `StateDelta`. |
 
@@ -226,8 +226,8 @@ engine.apply(trim_op, state)
 engine.undo(state)
 ```
 
-1. `UndoRedoController.pop_undo()` → returns `trim_inverse` (TrimClipOperation with old values)
-2. `OperationApplier.apply(trim_inverse, state)` → restores `source_in=0, source_out=250`
+1. `UndoRedoController.pop_undo()` → returns entry with `state_snapshot` (full state before trim)
+2. `_restore_state_from_snapshot(state, entry.state_snapshot)` → restores complete state
 3. `DomainEventBus` emits `UndoPerformed`
 
 **UndoRedoController after undo:**
@@ -315,16 +315,15 @@ Outtake/
 ├── core/                       # Core engine and domain logic
 │   ├── domain/                 # Data model: entities, time, assets, state
 │   ├── ops/                    # Operation framework: base, registry, validation, built-in ops
-│   ├── history/                # Undo/redo, operation log, checkpoints, inverse builder
+│   ├── history/                # Undo/redo with snapshot restore, operation log, checkpoints
 │   ├── serialization/          # JSON/YAML serialization, schema migration
 │   └── engine.py               # Central orchestrator (EditEngine)
 ├── events/                     # Domain event bus for external observers
 ├── schemas/                    # JSON Schema contracts for state and operations
-├── plugins/                    # Plugin extension point with example
 ├── tests/                      # Test pyramid: unit, integration, contract, replay
 ├── Dockerfile                  # Docker-first reproducible environment
 ├── docker-compose.yml          # Test orchestration
-├── pyproject.toml              # Python package config + plugin entry points
+├── pyproject.toml              # Python package config
 ├── requirements.txt            # Pinned dependencies
 └── Makefile                    # Dev workflow commands
 ```
