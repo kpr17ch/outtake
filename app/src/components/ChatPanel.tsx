@@ -206,11 +206,11 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
         <div className="max-w-2xl mx-auto">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-3">
-              <div className="text-xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+              <div className="text-lg font-medium tracking-tight" style={{ color: "var(--text-tertiary)" }}>
                 Outtake
               </div>
-              <p className="text-xs text-center max-w-sm" style={{ color: "var(--text-tertiary)" }}>
-                AI video editing agent. Describe what you want to edit.
+              <p className="text-[11px] text-center max-w-xs" style={{ color: "var(--text-tertiary)", opacity: 0.7 }}>
+                Describe what you want to edit.
               </p>
             </div>
           )}
@@ -220,12 +220,9 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
         </div>
       </div>
 
-      <div className="px-6 py-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+      <div className="px-6 py-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
         <div className="max-w-2xl mx-auto">
-          <div
-            className="flex items-end rounded-lg overflow-hidden"
-            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-          >
+          <div className="flex items-end">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -236,24 +233,32 @@ export default function ChatPanel({ messages, isStreaming, onSend, onStop }: Cha
                 }
               }}
               placeholder="Describe what you want to edit..."
-              className="flex-1 bg-transparent px-4 py-3 text-sm resize-none outline-none placeholder:text-[var(--text-tertiary)]"
-              style={{ color: "var(--text-primary)", minHeight: 44, maxHeight: 160 }}
+              className="flex-1 bg-transparent px-0 py-2 text-sm resize-none outline-none placeholder:text-[var(--text-tertiary)]"
+              style={{ color: "var(--text-primary)", minHeight: 40, maxHeight: 160 }}
               rows={1}
             />
             {isStreaming ? (
-              <button onClick={onStop} className="px-4 py-3 cursor-pointer" style={{ color: "var(--text-tertiary)" }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <rect x="3" y="3" width="10" height="10" rx="2" />
+              <button
+                onClick={onStop}
+                className="p-2 cursor-pointer rounded transition-colors"
+                style={{ color: "var(--text-tertiary)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <rect x="3" y="3" width="8" height="8" rx="1.5" />
                 </svg>
               </button>
             ) : (
               <button
                 onClick={handleSend}
-                className="px-4 py-3 cursor-pointer transition-colors"
-                style={{ color: input.trim() ? "var(--accent)" : "var(--text-tertiary)" }}
+                className="p-2 cursor-pointer rounded transition-colors"
+                style={{ color: input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)" }}
+                onMouseEnter={(e) => { if (input.trim()) e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)"; }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
             )}
