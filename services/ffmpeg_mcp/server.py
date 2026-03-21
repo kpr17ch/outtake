@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from uuid import uuid4
 
 from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 
 
 mcp = FastMCP("ffmpeg-tools")
 WORKSPACE_ROOT = Path(os.environ.get("WORKSPACE_ROOT", "/workspace")).resolve()
+FRAMES_DIR = WORKSPACE_ROOT / ".frames"
 
 
 def _assert_workspace_path(raw_path: str, *, must_exist: bool) -> Path:
@@ -30,6 +34,21 @@ def _run(cmd: list[str]) -> None:
 
 def _mk_output_ref_id(output_file: Path) -> str:
     return f"{output_file.stem}-{uuid4()}"
+
+
+def _frames_dir() -> Path:
+    FRAMES_DIR.mkdir(parents=True, exist_ok=True)
+    return FRAMES_DIR
+
+
+def _cleanup_frames_dir() -> int:
+    root = _frames_dir()
+    deleted = 0
+    for item in root.iterdir():
+        if item.is_file():
+            item.unlink()
+            deleted += 1
+    return deleted
 
 
 @mcp.tool
@@ -175,6 +194,106 @@ def add_subtitles(input_file: str, subtitle_file: str, output_file: str) -> dict
         ]
     )
     return {"output_file": str(out_path), "output_ref_id": _mk_output_ref_id(out_path)}
+
+
+@mcp.tool
+def check_frame(input_file: str, time: float, width: int = 480) -> list[object]:
+    if time < 0:
+        raise ValueError("time must be >= 0")
+    if width < 64:
+        raise ValueError("width must be >= 64")
+    in_path = _assert_workspace_path(input_file, must_exist=True)
+    _cleanup_frames_dir()
+    out_path = _frames_dir() / f"frame_{time:.3f}s.jpg"
+    _run(
+        [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(time),
+            "-i",
+            str(in_path),
+            "-frames:v",
+            "1",
+            "-vf",
+            f"scale={width}:-2",
+            "-q:v",
+            "3",
+            str(out_path),
+        ]
+    )
+    img_bytes = out_path.read_bytes()
+    image_content = Image(data=img_bytes, format="jpeg").to_image_content()
+    text_payload = {
+        "time": time,
+        "frame_file": str(out_path),
+        "width": width,
+        "height": None,
+        "frame_base64": base64.b64encode(img_bytes).decode("ascii"),
+    }
+    return [{"type": "text", "text": json.dumps(text_payload)}, image_content]
+
+
+@mcp.tool
+def scan_scenes(
+    input_file: str, threshold: float = 0.3, start: float = 0.0, end: float = 0.0
+) -> dict:
+    if threshold < 0 or threshold > 1:
+        raise ValueError("threshold must be between 0 and 1")
+    if start < 0:
+        raise ValueError("start must be >= 0")
+    if end != 0.0 and end <= start:
+        raise ValueError("end must be > start or 0.0")
+    in_path = _assert_workspace_path(input_file, must_exist=True)
+    cmd = ["ffmpeg", "-hide_banner"]
+    if start > 0:
+        cmd += ["-ss", str(start)]
+    if end > 0:
+        cmd += ["-to", str(end)]
+    cmd += [
+        "-i",
+        str(in_path),
+        "-vf",
+        f"select='gt(scene,{threshold})',metadata=print:file=-",
+        "-an",
+        "-f",
+        "null",
+        "-",
+    ]
+    out = subprocess.run(
+        cmd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    time_re = re.compile(r"pts_time:([0-9]+(?:\.[0-9]+)?)")
+    score_re = re.compile(r"lavfi\.scene_score=([0-9]+(?:\.[0-9]+)?)")
+    scenes: list[dict[str, float]] = []
+    pending_time: float | None = None
+    output_text = f"{out.stdout}\n{out.stderr}"
+    for line in output_text.splitlines():
+        t_match = time_re.search(line)
+        if t_match:
+            pending_time = float(t_match.group(1))
+            continue
+        s_match = score_re.search(line)
+        if s_match and pending_time is not None:
+            scenes.append({"time": pending_time, "score": float(s_match.group(1))})
+            pending_time = None
+    return {
+        "scene_count": len(scenes),
+        "threshold": threshold,
+        "start": start,
+        "end": end,
+        "scenes": scenes,
+    }
+
+
+@mcp.tool
+def cleanup_frames() -> dict:
+    deleted = _cleanup_frames_dir()
+    return {"status": "ok", "deleted": deleted}
 
 
 @mcp.tool
