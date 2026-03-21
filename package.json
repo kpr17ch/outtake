@@ -1,6 +1,10 @@
 {
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.39.0",
-    "dotenv": "^17.3.1"
+    "@remotion/cli": "^4.0.438",
+    "@remotion/google-fonts": "^4.0.438",
+    "@remotion/renderer": "^4.0.438",
+    "dotenv": "^17.3.1",
+    "remotion": "^4.0.438"
   }
 }
