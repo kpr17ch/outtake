@@ -14,10 +14,16 @@ venv/
 *.mp3
 *.aac
 
-# Work directories (root-level only)
-/raw/
-/workspace/
-/output/
-/assets/
-/transcripts/
+# Work directories
+raw/
+workspace/
+output/
+assets/
+transcripts/
 /sessions/
+
+# Persistence
+*.outtake
+.cas/
+.tmp_storage_test/
+.frames/
