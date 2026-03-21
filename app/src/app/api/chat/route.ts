@@ -21,6 +21,31 @@ export async function POST(req: Request) {
     start(controller) {
       const projectRoot = resolve(process.cwd(), "..");
 
+      // Build workspace context for the system prompt
+      const workspaceInfo = [
+        `## Your Workspace`,
+        ``,
+        `Your current working directory (cwd) is: \`${workspaceCwd}\``,
+        ``,
+        `**All file paths for MCP tools must be absolute paths under this directory.**`,
+        ``,
+        `Directory structure:`,
+        `- \`${workspaceCwd}/raw/\` — Source files (uploaded by user, NEVER modify)`,
+        `- \`${workspaceCwd}/workspace/\` — Working copies, intermediate results`,
+        `- \`${workspaceCwd}/output/\` — Final rendered videos`,
+        `- \`${workspaceCwd}/assets/\` — Generated assets`,
+        `- \`${workspaceCwd}/transcripts/\` — Transcriptions`,
+        `- \`${workspaceCwd}/plans/\` — Cut plans as JSON`,
+        ``,
+        `Example MCP tool call:`,
+        `\`\`\``,
+        `probe_media(input_file="${workspaceCwd}/raw/video.mp4")`,
+        `cut_clip(input_file="${workspaceCwd}/raw/video.mp4", output_file="${workspaceCwd}/output/clip.mp4", start=5.0, end=10.0)`,
+        `\`\`\``,
+        ``,
+        `When listing files, use: \`ls ${workspaceCwd}/raw/\``,
+      ].join("\n");
+
       const args = [
         "-p",
         message,
@@ -41,6 +66,9 @@ export async function POST(req: Request) {
         // System prompt: replace entirely with Outtake-specific prompt
         "--system-prompt-file",
         resolve(projectRoot, "SYSTEM_PROMPT.md"),
+        // Inject workspace paths so the agent knows where files are
+        "--append-system-prompt",
+        workspaceInfo,
         // Connect to FFmpeg MCP server for video editing tools
         "--mcp-config",
         resolve(projectRoot, "mcp-config.json"),

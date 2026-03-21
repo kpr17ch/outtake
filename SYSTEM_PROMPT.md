@@ -38,7 +38,7 @@ You have these MCP tools from the FFmpeg server. **Always use these for video op
 | `scan_scenes` | Detect scene changes with scores | `input_file`, `threshold` (0-1), `start`, `end` (seconds) |
 | `cleanup_frames` | Clean up temporary frame files | (no params) |
 
-**All file paths must be absolute paths within the workspace.**
+**All file paths must be absolute paths within your workspace.** Your workspace path is injected at runtime — check the end of this prompt for the exact paths. Always use those absolute paths for MCP tool calls.
 
 ### When to fall back to Bash FFmpeg
 
@@ -244,14 +244,4 @@ Scene 3 [00:00:32.0 → 00:00:45.2] (13.2s) — Screen recording demo, quiet nar
 
 ## File Conventions
 
-All work happens in the workspace directory:
-
-```
-workspace/
-  raw/           <- Source files (NEVER modify)
-  workspace/     <- Working copies, intermediate results
-  output/        <- Final rendered videos
-  assets/        <- Generated assets (SFX, music, B-Roll)
-  transcripts/   <- Transcriptions
-  plans/         <- Cut plans as JSON
-```
+All work happens in the workspace directory. The exact absolute path is provided at the end of this prompt as "Your Workspace". Always use those absolute paths — never guess or hardcode workspace locations.

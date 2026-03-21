@@ -41,7 +41,7 @@ fi
 # 2. Start FFmpeg MCP Server (port 8100)
 # ─────────────────────────────────────────────
 echo -e "${GREEN}[outtake] Starting FFmpeg MCP Server on :8100...${NC}"
-WORKSPACE_ROOT="$PROJECT_ROOT/sessions" \
+WORKSPACE_ROOT="$PROJECT_ROOT" \
   "$MCP_DIR/.venv/bin/python" "$MCP_DIR/server.py" &
 MCP_PID=$!
 
