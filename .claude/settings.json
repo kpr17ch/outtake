@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ffmpeg*)",
+      "Bash(ffprobe*)",
+      "Bash(python*)",
+      "Bash(node*)",
+      "Bash(mkdir*)",
+      "Bash(cp*)",
+      "Bash(ls*)"
+    ]
+  },
+  "mcpServers": {
+    "ffmpeg": {
+      "command": "node",
+      "args": ["mcp-servers/ffmpeg-server/index.js"],
+      "cwd": "/Users/kai.perich/projects/outtake"
+    },
+    "whisperx": {
+      "command": "python",
+      "args": ["mcp-servers/whisperx-server/server.py"],
+      "cwd": "/Users/kai.perich/projects/outtake"
+    },
+    "media-gen": {
+      "command": "python",
+      "args": ["mcp-servers/media-gen-server/server.py"],
+      "cwd": "/Users/kai.perich/projects/outtake"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Video files (too large for git)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.aac
+
+# Work directories
+raw/
+workspace/
+output/
+assets/
+transcripts/
