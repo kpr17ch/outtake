@@ -3,12 +3,20 @@
 import { useState, useRef, useCallback } from "react";
 import type { ChatMessage, ToolCall } from "./types";
 
+export interface EditorContext {
+  activeVideo?: string;
+  selection?: { inSeconds: number; outSeconds: number };
+  duration?: number;
+  fps?: number;
+}
+
 interface UseChatOptions {
   activeSessionId: string | null;
   onClaudeSessionId?: (claudeSessionId: string) => void;
+  editorContext?: EditorContext;
 }
 
-export function useChat({ activeSessionId, onClaudeSessionId }: UseChatOptions) {
+export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -137,6 +145,7 @@ export function useChat({ activeSessionId, onClaudeSessionId }: UseChatOptions) 
           body: JSON.stringify({
             message: input.trim(),
             sessionId: activeSessionId,
+            editorContext,
           }),
           signal: abortRef.current.signal,
         });

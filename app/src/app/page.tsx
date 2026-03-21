@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Preview, { type PreviewHandle } from "@/components/Preview";
 import Timeline, { type Marker, type TimelineTrack } from "@/components/Timeline";
 import ChatPanel from "@/components/ChatPanel";
-import { useChat } from "@/lib/useChat";
+import { useChat, type EditorContext } from "@/lib/useChat";
 import type { Session } from "@/lib/types";
 import type { MediaItem } from "@/components/MediaBin";
 
@@ -46,9 +46,13 @@ export default function Home() {
     } catch { /* ignore */ }
   }, [sessionId]);
 
+  // Editor context sent to agent with every message
+  const [editorCtx, setEditorCtx] = useState<EditorContext>({});
+
   const { messages, isStreaming, send, stop } = useChat({
     activeSessionId: sessionId,
     onClaudeSessionId: handleClaudeSessionId,
+    editorContext: editorCtx,
   });
 
   // ─── Media ───
@@ -168,6 +172,19 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handler);
   }, [currentTime, duration, handleSeek, handleSetIn, handleSetOut, handleClearMarkers]);
 
+  // ─── Sync editor context for agent ───
+  useEffect(() => {
+    const sel = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
+      ? { inSeconds: markers.inTime, outSeconds: markers.outTime }
+      : undefined;
+    setEditorCtx({
+      activeVideo: activeMedia?.kind === "video" ? activeMedia.name : undefined,
+      selection: sel,
+      duration: duration || undefined,
+      fps: fps || undefined,
+    });
+  }, [activeMedia, markers, duration, fps]);
+
   // ─── Chat with selection context ───
   const selectionForChat = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
     ? { inSeconds: markers.inTime, outSeconds: markers.outTime }
@@ -177,12 +194,7 @@ export default function Home() {
   useEffect(() => { isFirstMsg.current = true; }, [sessionId]);
 
   const handleSend = useCallback((input: string) => {
-    let msg = input;
-    if (selectionForChat) {
-      msg = `[Selection: ${selectionForChat.inSeconds.toFixed(2)}s → ${selectionForChat.outSeconds.toFixed(2)}s` +
-        (activeMedia ? ` in ${activeMedia.name}` : "") + `] ${input}`;
-    }
-    send(msg);
+    send(input);
 
     if (isFirstMsg.current && sessionId) {
       isFirstMsg.current = false;

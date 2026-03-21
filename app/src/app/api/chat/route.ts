@@ -5,8 +5,19 @@ import { resolveWorkspaceContext } from "@/lib/workspace-context";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+interface EditorContext {
+  activeVideo?: string;
+  selection?: { inSeconds: number; outSeconds: number };
+  duration?: number;
+  fps?: number;
+}
+
 export async function POST(req: Request) {
-  const { message, sessionId } = await req.json();
+  const { message, sessionId, editorContext } = await req.json() as {
+    message: string;
+    sessionId?: string;
+    editorContext?: EditorContext;
+  };
   const workspace = await resolveWorkspaceContext(sessionId);
 
   if (sessionId && !workspace) {
@@ -22,29 +33,36 @@ export async function POST(req: Request) {
       const projectRoot = resolve(process.cwd(), "..");
 
       // Build workspace context for the system prompt
-      const workspaceInfo = [
+      const ctx = editorContext;
+      const workspaceLines = [
         `## Your Workspace`,
         ``,
-        `Your current working directory (cwd) is: \`${workspaceCwd}\``,
+        `cwd: \`${workspaceCwd}\``,
         ``,
         `**All file paths for MCP tools must be absolute paths under this directory.**`,
         ``,
-        `Directory structure:`,
-        `- \`${workspaceCwd}/raw/\` — Source files (uploaded by user, NEVER modify)`,
-        `- \`${workspaceCwd}/workspace/\` — Working copies, intermediate results`,
-        `- \`${workspaceCwd}/output/\` — Final rendered videos`,
-        `- \`${workspaceCwd}/assets/\` — Generated assets`,
-        `- \`${workspaceCwd}/transcripts/\` — Transcriptions`,
-        `- \`${workspaceCwd}/plans/\` — Cut plans as JSON`,
+        `Directories:`,
+        `- \`${workspaceCwd}/raw/\` — Source files (NEVER modify)`,
+        `- \`${workspaceCwd}/output/\` — Rendered results`,
+        `- \`${workspaceCwd}/workspace/\` — Working copies`,
         ``,
-        `Example MCP tool call:`,
-        `\`\`\``,
-        `probe_media(input_file="${workspaceCwd}/raw/video.mp4")`,
-        `cut_clip(input_file="${workspaceCwd}/raw/video.mp4", output_file="${workspaceCwd}/output/clip.mp4", start=5.0, end=10.0)`,
-        `\`\`\``,
-        ``,
-        `When listing files, use: \`ls ${workspaceCwd}/raw/\``,
-      ].join("\n");
+      ];
+
+      // Add editor context so agent knows what user is looking at
+      if (ctx?.activeVideo) {
+        workspaceLines.push(`## Active Video`);
+        workspaceLines.push(`The user is currently viewing: \`${ctx.activeVideo}\``);
+        workspaceLines.push(`Full path: \`${workspaceCwd}/raw/${ctx.activeVideo}\``);
+        if (ctx.duration) workspaceLines.push(`Duration: ${ctx.duration.toFixed(2)}s`);
+        if (ctx.fps) workspaceLines.push(`FPS: ${ctx.fps}`);
+        if (ctx.selection) {
+          workspaceLines.push(`**Active selection: ${ctx.selection.inSeconds.toFixed(2)}s → ${ctx.selection.outSeconds.toFixed(2)}s** (${(ctx.selection.outSeconds - ctx.selection.inSeconds).toFixed(1)}s)`);
+          workspaceLines.push(`When the user says "this", "the selection", "this part" etc., they mean this time range.`);
+        }
+        workspaceLines.push(``);
+      }
+
+      const workspaceInfo = workspaceLines.join("\n");
 
       const args = [
         "-p",

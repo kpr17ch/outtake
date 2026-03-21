@@ -89,32 +89,94 @@ const mdComponents = {
   ),
 };
 
-// --- Tool Call (single line, like Cursor) ---
+// --- Tool Call (compact, smart formatting) ---
+
+const TOOL_ICONS: Record<string, string> = {
+  "mcp__ffmpeg__probe_media": "🔍",
+  "mcp__ffmpeg__cut_clip": "✂️",
+  "mcp__ffmpeg__concat_clips": "🔗",
+  "mcp__ffmpeg__transcode": "🔄",
+  "mcp__ffmpeg__scan_scenes": "📊",
+  "mcp__ffmpeg__check_frame": "🖼",
+  "mcp__ffmpeg__extract_audio": "🎵",
+  "mcp__ffmpeg__add_subtitles": "📝",
+  "mcp__ffmpeg__extract_thumbnail": "📸",
+  "mcp__ffmpeg__cleanup_frames": "🗑",
+  Bash: "⌘",
+  Read: "📄",
+  Write: "✏️",
+  Edit: "✏️",
+  Glob: "🔎",
+  Grep: "🔎",
+};
+
+function formatToolSummary(tool: ToolCall): string {
+  const name = tool.name;
+  try {
+    const input = JSON.parse(tool.input || "{}");
+
+    if (name === "mcp__ffmpeg__cut_clip") {
+      const file = (input.input_file || "").split("/").pop();
+      return `Cut ${file} [${input.start}s → ${input.end}s]`;
+    }
+    if (name === "mcp__ffmpeg__concat_clips") {
+      const count = (input.input_files || []).length;
+      return `Concat ${count} clips`;
+    }
+    if (name === "mcp__ffmpeg__probe_media") {
+      return `Probe ${(input.input_file || "").split("/").pop()}`;
+    }
+    if (name === "mcp__ffmpeg__scan_scenes") {
+      return `Scan scenes (threshold: ${input.threshold || 0.3})`;
+    }
+    if (name === "mcp__ffmpeg__check_frame") {
+      return `Check frame at ${input.time}s`;
+    }
+    if (name === "mcp__ffmpeg__transcode") {
+      return `Transcode → ${input.preset}`;
+    }
+    if (name === "Bash") {
+      const cmd = (input.command || "").slice(0, 60);
+      return cmd + (input.command?.length > 60 ? "…" : "");
+    }
+    if (name === "Read" || name === "Glob" || name === "Grep") {
+      const path = (input.file_path || input.path || input.pattern || "").split("/").pop();
+      return path || name;
+    }
+  } catch { /* ignore */ }
+
+  return name.replace("mcp__ffmpeg__", "");
+}
 
 function ToolCallLine({ tool }: { tool: ToolCall }) {
   const [open, setOpen] = useState(false);
+  const icon = TOOL_ICONS[tool.name] || "⚙";
+  const summary = formatToolSummary(tool);
+  const isDone = tool.state === "done";
+  const isRunning = tool.state === "running";
 
   return (
-    <div className="mb-0.5">
+    <div className="mb-px">
       <button
-        className="flex items-center gap-1.5 text-sm cursor-pointer"
-        style={{ color: "var(--text-secondary)" }}
+        className="flex items-center gap-1.5 text-[12px] cursor-pointer py-0.5 w-full text-left"
+        style={{ color: "var(--text-tertiary)" }}
         onClick={() => setOpen(!open)}
       >
-        <span className="font-mono" style={{ color: "var(--text-secondary)" }}>{tool.name}</span>
-        {tool.state === "running" && (
-          <span
-            className="w-1 h-1 rounded-full flex-shrink-0"
-            style={{ background: "var(--accent)", animation: "pulse-dot 1.5s ease-in-out infinite" }}
-          />
+        <span className="shrink-0 w-4 text-center">{icon}</span>
+        <span className="truncate flex-1" style={{ color: isDone ? "var(--text-tertiary)" : "var(--text-secondary)" }}>
+          {summary}
+        </span>
+        {isRunning && (
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--accent)", animation: "pulse-dot 1.5s ease-in-out infinite" }} />
+        )}
+        {isDone && (
+          <span className="text-[10px] shrink-0" style={{ color: "var(--success)" }}>✓</span>
         )}
       </button>
       {open && (tool.input || tool.result) && (
-        <div className="ml-0 mt-1 mb-2 text-xs font-mono max-h-32 overflow-y-auto" style={{ color: "var(--text-tertiary)" }}>
+        <div className="ml-5 mt-0.5 mb-1.5 text-[11px] font-mono max-h-24 overflow-y-auto rounded px-2 py-1" style={{ background: "var(--bg-surface)", color: "var(--text-tertiary)" }}>
           {tool.input && <pre className="whitespace-pre-wrap">{tool.input}</pre>}
-          {tool.result && (
-            <pre className="whitespace-pre-wrap mt-1" style={{ color: "var(--success)" }}>{tool.result}</pre>
-          )}
+          {tool.result && <pre className="whitespace-pre-wrap mt-1" style={{ color: "var(--text-secondary)" }}>{tool.result.slice(0, 500)}{tool.result.length > 500 ? "…" : ""}</pre>}
         </div>
       )}
     </div>
@@ -149,9 +211,9 @@ function Message({ message }: { message: ChatMessage }) {
         </p>
       )}
 
-      {/* Tool calls — one line each */}
+      {/* Tool calls — compact */}
       {hasTools && (
-        <div className="mb-2">
+        <div className="mb-2 py-1 px-2 rounded" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}>
           {message.toolCalls!.map((tool) => (
             <ToolCallLine key={tool.id} tool={tool} />
           ))}
