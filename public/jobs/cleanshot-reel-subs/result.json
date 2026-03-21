@@ -1,0 +1,29 @@
+{
+  "jobId": "cleanshot-reel-subs",
+  "mode": "full",
+  "input": {
+    "video": "/Users/kai.perich/Projects/outtake/sessions/708bfdb7-4dd5-4f29-ac1a-296e01834dd8/workspace/output/CleanShot_reel_15s.mp4",
+    "languageInput": "auto",
+    "patchPath": null
+  },
+  "media": {
+    "fps": 120,
+    "width": 3582,
+    "height": 1860,
+    "durationSec": 13.042058,
+    "sourceDurationMs": 13042,
+    "durationInFrames": 1627
+  },
+  "output": {
+    "alignedJson": "/Users/kai.perich/Projects/outtake/public/jobs/cleanshot-reel-subs/aligned.json",
+    "previewMp4": "/Users/kai.perich/Projects/outtake/out/jobs/cleanshot-reel-subs/preview.mp4"
+  },
+  "diagnostics": {
+    "wordCount": 36,
+    "correctedWordCount": 0,
+    "averageDeltaMs": 0,
+    "maxDeltaMs": 0,
+    "suspiciousRegions": [],
+    "detectedLanguage": "eng"
+  }
+}
