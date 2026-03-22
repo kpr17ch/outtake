@@ -1,65 +1,111 @@
 # Outtake
 
-AI video editing agent. Cursor for video editing.
-
-Uses the **Cursor Agent CLI** by default (`OUTTAKE_AGENT_BACKEND=cursor`) — spawned from a Next.js API route with `--print` and `--output-format stream-json`. Set **`CURSOR_API_KEY`** in [`app/.env`](app/.env) (see [`app/.env.example`](app/.env.example)).
-
-**Optional:** set `OUTTAKE_AGENT_BACKEND=claude` to use [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) instead (subscription auth).
+AI video editing agent with a web UI. Upload footage, chat with an AI editor, and get cuts, subtitles, motion graphics, sound effects, and AI-generated clips back.
 
 ## Quick Start
 
 ```bash
-# Install Cursor Agent CLI (adds `agent` to your PATH)
+# 1. Install Cursor Agent CLI
 curl https://cursor.com/install -fsSL | bash
 
-cd app
-cp .env.example .env
-# Edit .env: set CURSOR_API_KEY from Cursor (Dashboard → API / CLI key)
+# 2. Start the FFmpeg MCP server
+cd services/ffmpeg_mcp
+pip install -r requirements.txt
+python server.py          # runs on port 8100
 
+# 3. Start the web app
+cd app
+cp .env.example .env      # set CURSOR_API_KEY
 npm install
-npm run dev
-# Open http://localhost:3000
+npm run dev               # http://localhost:3000
+
+# 4. Install Remotion + transcription deps (root)
+npm install               # remotion, @elevenlabs/elevenlabs-js
 ```
 
-Start the FFmpeg MCP server on port **8100** (see `services/ffmpeg_mcp/`) so editing tools work. MCP for the Cursor CLI is configured in [`.cursor/mcp.json`](.cursor/mcp.json) (same URL as [`mcp-config.json`](mcp-config.json) for Claude).
+### Environment Variables
+
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `CURSOR_API_KEY` | `app/.env` | Cursor Agent CLI authentication |
+| `ELEVENLABS_API_KEY` | `.env` | Transcription (Scribe v2) + sound effects |
+| `REPLICATE_API_TOKEN` | `skills/video-gen/.env` | AI video generation (Wan 2.6) |
+
+Set `OUTTAKE_AGENT_BACKEND=claude` in `app/.env` to use Claude Code CLI instead of Cursor.
+
+## What It Does
+
+| Capability | Powered by |
+|------------|------------|
+| Cut, concat, transcode, extract audio | FFmpeg via MCP tools |
+| Animated word-by-word subtitles | ElevenLabs Scribe v2 + Remotion |
+| Motion graphics (wave transitions, kinetic typography) | Remotion |
+| Sound effects from text descriptions | ElevenLabs Text-to-SFX |
+| AI video generation (text-to-video, image-to-video) | Replicate Wan 2.6 |
+| Audio normalization, complex filters | FFmpeg (Bash) |
 
 ## Architecture
 
 ```
-Next.js Web App (app/)
-  |
-  +-- /api/chat (POST)
-  |     |
-  |     +-- Spawns Cursor `agent` (or `claude` if OUTTAKE_AGENT_BACKEND=claude)
-  |           stream-json over stdout → SSE to the UI
-  |           +-- Cursor: CURSOR_API_KEY, .cursor/mcp.json, --force --approve-mcps
-  |           +-- Claude: mcp-config.json, --system-prompt-file SYSTEM_PROMPT.md
-  |
-  +-- Chat UI (React)
-  |     +-- SSE streaming from CLI JSON output
-  |     +-- Tool call visualization
-  |
-  +-- Video Preview Panel (planned)
+┌─────────────────────────────────┐
+│  Next.js Web App (app/)         │
+│                                 │
+│  ┌───────────┐  ┌────────────┐  │
+│  │ Chat Panel │  │ Video      │  │
+│  │ (SSE)     │  │ Preview    │  │
+│  └─────┬─────┘  └────────────┘  │
+│        │        ┌────────────┐  │
+│        │        │ Timeline   │  │
+│        │        └────────────┘  │
+└────────┼────────────────────────┘
+         │
+    /api/chat (POST)
+         │
+    Spawns Cursor Agent CLI
+    (or Claude Code CLI)
+         │
+    ┌────┴────┐
+    │ FFmpeg  │  MCP server (port 8100)
+    │ MCP     │  probe, cut, concat, transcode,
+    └─────────┘  scan_scenes, mix_sfx, ...
 ```
+
+The web app spawns the agent CLI as a subprocess with `--print --output-format stream-json`. The agent has access to FFmpeg MCP tools, Remotion rendering, ElevenLabs APIs, and Replicate for video generation.
 
 ## Project Structure
 
 ```
 outtake/
-+-- app/                     <- Next.js web application
-|   +-- src/
-|   |   +-- app/
-|   |   |   +-- api/chat/    <- Cursor or Claude CLI subprocess integration
-|   |   |   +-- page.tsx     <- Main layout
-|   |   +-- components/      <- UI components
-|   |   +-- lib/             <- Chat hook, types
-+-- SYSTEM_PROMPT.md         <- Agent system prompt (loaded via --system-prompt-file)
-+-- workspace/               <- Video editing workspace (cwd for Claude)
+├── app/                          Next.js web application
+│   └── src/
+│       ├── app/
+│       │   ├── api/chat/         Agent CLI subprocess + SSE streaming
+│       │   └── page.tsx          Main editor layout
+│       ├── components/           ChatPanel, Preview, Timeline, MediaBin
+│       └── lib/                  useChat hook, cursor-stream-adapter, timecode utils
+├── src/                          Remotion compositions
+│   ├── OuttakesCaption.tsx       Animated subtitle overlay
+│   ├── OuttakeMotion.tsx         Motion graphics (wave, kinetic text, clapperboard)
+│   └── Root.tsx                  Composition registry
+├── services/ffmpeg_mcp/          FFmpeg MCP server (Python, port 8100)
+├── skills/
+│   ├── sound-effects/            ElevenLabs SFX generation
+│   └── video-gen/                Replicate Wan 2.6 video generation
+├── transcribe-pipeline.mjs       ElevenLabs Scribe v2 → aligned.json
+├── CLAUDE.md                     Agent system prompt (skills, tools, workflow)
+└── SYSTEM_PROMPT.md              Injected into agent at runtime
 ```
 
 ## Tech Stack
 
-- **Agent**: Cursor Agent CLI (default) or Claude Code CLI; FFmpeg via MCP
-- **Frontend**: Next.js, React, Tailwind CSS
-- **Video**: FFmpeg (via Bash tool)
-- **Transcription**: WhisperX (planned)
+- **Frontend**: Next.js 16, React 19, Tailwind CSS, Remotion Player
+- **Agent**: Cursor Agent CLI (default) or Claude Code CLI
+- **Video Processing**: FFmpeg via MCP (Model Context Protocol)
+- **Transcription**: ElevenLabs Scribe v2 (word-level timestamps)
+- **Motion Graphics**: Remotion (React-based video rendering)
+- **Sound Effects**: ElevenLabs Text-to-SFX API
+- **Video Generation**: Replicate Wan 2.6 (text-to-video, image-to-video)
+
+## License
+
+MIT
