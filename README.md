@@ -2,9 +2,9 @@
   <img src="logo.png" alt="Outtake" width="400">
 </p>
 
-<p align="center">AI video editing agent with a web UI.</p>
+<p align="center"><strong>An AI-powered video editor you talk to.</strong><br>Drop your footage, describe your vision, get a finished edit.</p>
 
-# Upload footage, chat with an AI editor, and get cuts, subtitles, motion graphics, sound effects, and AI-generated clips back.
+---
 
 ## Quick Start
 
