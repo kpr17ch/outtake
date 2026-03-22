@@ -65,24 +65,26 @@ export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: U
         return;
       }
 
-      // Tool result — mark tool as done
+      // Tool result — mark tool as done (optional tool_use_id for Cursor-adapter streams)
       if (msg.type === "user" && msg.tool_use_result !== undefined) {
         const result = msg.tool_use_result;
+        const toolUseId =
+          typeof msg.tool_use_id === "string" ? msg.tool_use_id : undefined;
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== assistantId) return m;
-            const toolCalls = (m.toolCalls || []).map((t) =>
-              t.state === "running"
-                ? {
-                    ...t,
-                    result:
-                      typeof result === "string"
-                        ? result
-                        : JSON.stringify(result, null, 2),
-                    state: "done" as const,
-                  }
-                : t
-            );
+            const toolCalls = (m.toolCalls || []).map((t) => {
+              if (t.state !== "running") return t;
+              if (toolUseId !== undefined && t.id !== toolUseId) return t;
+              return {
+                ...t,
+                result:
+                  typeof result === "string"
+                    ? result
+                    : JSON.stringify(result, null, 2),
+                state: "done" as const,
+              };
+            });
             return { ...m, toolCalls };
           })
         );

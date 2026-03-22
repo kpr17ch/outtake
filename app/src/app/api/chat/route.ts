@@ -1,5 +1,7 @@
 import { spawn } from "child_process";
+import { readFileSync } from "fs";
 import { resolve } from "path";
+import { adaptCursorAgentLine } from "@/lib/cursor-stream-adapter";
 import { resolveWorkspaceContext } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
@@ -7,11 +9,20 @@ export const maxDuration = 300;
 
 interface EditorContext {
   activeVideo?: string;
-  activeVideoPath?: string; // relative path like "input/video.mp4" or "output/cut.mp4"
+  activeVideoPath?: string;
   selection?: { inSeconds: number; outSeconds: number };
   duration?: number;
   fps?: number;
-  referencedFiles?: string[]; // files mentioned via @ in chat
+  referencedFiles?: string[];
+}
+
+function loadSystemPrompt(projectRoot: string): string {
+  const path = resolve(projectRoot, "SYSTEM_PROMPT.md");
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return "";
+  }
 }
 
 export async function POST(req: Request) {
@@ -25,17 +36,21 @@ export async function POST(req: Request) {
   if (sessionId && !workspace) {
     return Response.json({ error: "Session not found" }, { status: 404 });
   }
+  if (!workspace?.workspacePath) {
+    return Response.json({ error: "Workspace unavailable" }, { status: 500 });
+  }
 
-  const workspaceCwd = workspace?.workspacePath;
-  const claudeSessionId = workspace?.claudeSessionId;
+  const workspaceCwd = workspace.workspacePath;
+  const agentSessionId = workspace?.claudeSessionId;
 
   const encoder = new TextEncoder();
+  const backend = (process.env.OUTTAKE_AGENT_BACKEND || "cursor").toLowerCase();
+
   const stream = new ReadableStream({
     start(controller) {
       const projectRoot = resolve(process.cwd(), "..");
-
-      // Build workspace context for the system prompt
       const ctx = editorContext;
+
       const workspaceLines = [
         `## Your Workspace`,
         ``,
@@ -61,7 +76,6 @@ export async function POST(req: Request) {
         ``,
       ];
 
-      // Add editor context so agent knows what user is looking at
       if (ctx?.activeVideo) {
         const videoPath = ctx.activeVideoPath || `input/${ctx.activeVideo}`;
         workspaceLines.push(`## Active Video`);
@@ -70,14 +84,19 @@ export async function POST(req: Request) {
         if (ctx.duration) workspaceLines.push(`Duration: ${ctx.duration.toFixed(2)}s`);
         if (ctx.fps) workspaceLines.push(`FPS: ${ctx.fps}`);
         if (ctx.selection) {
-          workspaceLines.push(`**Active selection: ${ctx.selection.inSeconds.toFixed(2)}s → ${ctx.selection.outSeconds.toFixed(2)}s** (${(ctx.selection.outSeconds - ctx.selection.inSeconds).toFixed(1)}s)`);
-          workspaceLines.push(`When the user says "this", "the selection", "this part", "here" etc., they mean this time range in this video.`);
+          workspaceLines.push(
+            `**Active selection: ${ctx.selection.inSeconds.toFixed(2)}s → ${ctx.selection.outSeconds.toFixed(2)}s** (${(ctx.selection.outSeconds - ctx.selection.inSeconds).toFixed(1)}s)`
+          );
+          workspaceLines.push(
+            `When the user says "this", "the selection", "this part", "here" etc., they mean this time range in this video.`
+          );
         }
-        workspaceLines.push(`When the user says "the video", "das Video" etc. without specifying which one, they mean this active video.`);
+        workspaceLines.push(
+          `When the user says "the video", "das Video" etc. without specifying which one, they mean this active video.`
+        );
         workspaceLines.push(``);
       }
 
-      // Referenced files via @ mentions
       if (ctx?.referencedFiles?.length) {
         workspaceLines.push(`## Referenced Files`);
         workspaceLines.push(`The user explicitly referenced these files in their message:`);
@@ -90,52 +109,94 @@ export async function POST(req: Request) {
 
       const workspaceInfo = workspaceLines.join("\n");
 
-      const args = [
-        "-p",
-        message,
-        "--output-format",
-        "stream-json",
-        "--dangerously-skip-permissions",
-        "--model",
-        "claude-opus-4-6",
-        "--verbose",
-        // Only load project settings (CLAUDE.md from workspace), ignore user/global settings
-        "--setting-sources",
-        "project",
-        // Restrict tools to video-editing relevant ones
-        "--tools",
-        "Bash,Read,Write,Edit,Glob,Grep",
-        // Disable personal skills/commands
-        "--disable-slash-commands",
-        // System prompt: replace entirely with Outtake-specific prompt
-        "--system-prompt-file",
-        resolve(projectRoot, "SYSTEM_PROMPT.md"),
-        // Inject workspace paths so the agent knows where files are
-        "--append-system-prompt",
-        workspaceInfo,
-        // Connect to FFmpeg MCP server for video editing tools
-        "--mcp-config",
-        resolve(projectRoot, "mcp-config.json"),
-      ];
+      let bin: string;
+      let args: string[];
+      let env: NodeJS.ProcessEnv;
 
-      if (claudeSessionId) {
-        args.push("--resume", claudeSessionId);
+      if (backend === "claude") {
+        args = [
+          "-p",
+          message,
+          "--output-format",
+          "stream-json",
+          "--dangerously-skip-permissions",
+          "--model",
+          process.env.CLAUDE_MODEL || "claude-opus-4-6",
+          "--verbose",
+          "--setting-sources",
+          "project",
+          "--tools",
+          "Bash,Read,Write,Edit,Glob,Grep",
+          "--disable-slash-commands",
+          "--system-prompt-file",
+          resolve(projectRoot, "SYSTEM_PROMPT.md"),
+          "--append-system-prompt",
+          workspaceInfo,
+          "--mcp-config",
+          resolve(projectRoot, "mcp-config.json"),
+        ];
+        if (agentSessionId) {
+          args.push("--resume", agentSessionId);
+        }
+        bin = process.env.CLAUDE_BIN || "claude";
+        env = { ...process.env };
+        delete env.ANTHROPIC_API_KEY;
+      } else {
+        const systemBody = loadSystemPrompt(projectRoot);
+        const composedPrompt = [
+          systemBody.trim(),
+          workspaceInfo,
+          `---`,
+          `User message:`,
+          message.trim(),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+
+        args = [
+          "-p",
+          composedPrompt,
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--approve-mcps",
+          "--trust",
+          "--workspace",
+          workspaceCwd,
+        ];
+        const model = process.env.CURSOR_AGENT_MODEL?.trim();
+        if (model) {
+          args.push("--model", model);
+        }
+        if (agentSessionId) {
+          args.push("--resume", agentSessionId);
+        }
+        bin = process.env.CURSOR_AGENT_BIN || "agent";
+        env = { ...process.env };
       }
 
-      const claudeBin =
-        process.env.CLAUDE_BIN || "/Users/kai.perich/.local/bin/claude";
+      const enqueueAdaptedLine = (line: string) => {
+        const outs =
+          backend === "cursor" ? adaptCursorAgentLine(line) : [line];
+        for (const out of outs) {
+          if (!out.trim()) continue;
+          try {
+            JSON.parse(out);
+            controller.enqueue(encoder.encode(`data: ${out}\n\n`));
+          } catch {
+            // skip non-JSON
+          }
+        }
+      };
 
-      // Pass full env (needed for auth) but remove API key to use subscription
-      const cleanEnv = { ...process.env };
-      delete cleanEnv.ANTHROPIC_API_KEY;
-
-      const proc = spawn(claudeBin, args, {
+      const proc = spawn(bin, args, {
         cwd: workspaceCwd,
-        env: cleanEnv,
+        env,
         stdio: ["ignore", "pipe", "pipe"],
       });
 
       let buffer = "";
+      const logLabel = backend === "claude" ? "claude" : "cursor-agent";
 
       proc.stdout.on("data", (chunk: Buffer) => {
         buffer += chunk.toString();
@@ -146,7 +207,7 @@ export async function POST(req: Request) {
           if (!line.trim()) continue;
           try {
             JSON.parse(line);
-            controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+            enqueueAdaptedLine(line);
           } catch {
             // skip non-JSON lines
           }
@@ -156,7 +217,7 @@ export async function POST(req: Request) {
       proc.stderr.on("data", (chunk: Buffer) => {
         const text = chunk.toString().trim();
         if (text) {
-          console.error("[claude stderr]", text);
+          console.error(`[${logLabel} stderr]`, text);
         }
       });
 
@@ -164,7 +225,7 @@ export async function POST(req: Request) {
         if (buffer.trim()) {
           try {
             JSON.parse(buffer);
-            controller.enqueue(encoder.encode(`data: ${buffer}\n\n`));
+            enqueueAdaptedLine(buffer);
           } catch {
             // skip
           }
@@ -172,7 +233,10 @@ export async function POST(req: Request) {
         if (code !== 0) {
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: "error", message: `claude exited with code ${code}` })}\n\n`
+              `data: ${JSON.stringify({
+                type: "error",
+                message: `${logLabel} exited with code ${code}`,
+              })}\n\n`
             )
           );
         }
