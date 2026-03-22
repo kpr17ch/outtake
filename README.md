@@ -51,30 +51,41 @@ Set `OUTTAKE_AGENT_BACKEND=claude` in `app/.env` to use Claude Code CLI instead 
 ## Architecture
 
 ```
-┌─────────────────────────────────┐
-│  Next.js Web App (app/)         │
-│                                 │
-│  ┌───────────┐  ┌────────────┐  │
-│  │ Chat Panel │  │ Video      │  │
-│  │ (SSE)     │  │ Preview    │  │
-│  └─────┬─────┘  └────────────┘  │
-│        │        ┌────────────┐  │
-│        │        │ Timeline   │  │
-│        │        └────────────┘  │
-└────────┼────────────────────────┘
+┌──────────────────────────────────────┐
+│  Next.js Web App (app/)              │
+│                                      │
+│  ┌───────────┐  ┌─────────────────┐  │
+│  │ Chat Panel │  │ Video Preview   │  │
+│  │ (SSE)     │  │ + Remotion Player│  │
+│  └─────┬─────┘  └─────────────────┘  │
+│        │        ┌─────────────────┐  │
+│        │        │ Timeline        │  │
+│        │        └─────────────────┘  │
+└────────┼─────────────────────────────┘
          │
     /api/chat (POST)
          │
     Spawns Cursor Agent CLI
     (or Claude Code CLI)
          │
-    ┌────┴────┐
-    │ FFmpeg  │  MCP server (port 8100)
-    │ MCP     │  probe, cut, concat, transcode,
-    └─────────┘  scan_scenes, mix_sfx, ...
+         ├──── FFmpeg MCP Server (port 8100)
+         │     probe, cut, concat, transcode,
+         │     scan_scenes, mix_sfx, extract_audio
+         │
+         ├──── Remotion (React video rendering)
+         │     Animated subtitles (SubtitleJobPreview)
+         │     Motion graphics (OuttakeMotion)
+         │     Liquid wave transitions, kinetic typography
+         │
+         ├──── ElevenLabs API
+         │     Scribe v2 transcription → word-level timestamps
+         │     Text-to-SFX sound effects generation
+         │
+         └──── Replicate API
+               Wan 2.6 text-to-video / image-to-video
 ```
 
-The web app spawns the agent CLI as a subprocess with `--print --output-format stream-json`. The agent has access to FFmpeg MCP tools, Remotion rendering, ElevenLabs APIs, and Replicate for video generation.
+The web app spawns the agent CLI as a subprocess with `--print --output-format stream-json`. The agent orchestrates all tools autonomously — it analyzes footage with FFmpeg MCP, transcribes speech with ElevenLabs Scribe v2, renders animated subtitles and motion graphics with Remotion, generates sound effects via ElevenLabs, and can create AI video clips through Replicate.
 
 ## Project Structure
 
