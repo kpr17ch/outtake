@@ -6,6 +6,7 @@ import Preview, { type PreviewHandle } from "@/components/Preview";
 import Timeline, { type Marker, type TimelineTrack } from "@/components/Timeline";
 import ChatPanel from "@/components/ChatPanel";
 import { useChat, type EditorContext } from "@/lib/useChat";
+import { buildSelectionRange, DEFAULT_FPS, normalizeFps, secondsToFrame } from "@/lib/timecode";
 import type { Session } from "@/lib/types";
 import type { MediaItem } from "@/components/MediaBin";
 
@@ -46,13 +47,9 @@ export default function Home() {
     } catch { /* ignore */ }
   }, [sessionId]);
 
-  // Editor context sent to agent with every message
-  const [editorCtx, setEditorCtx] = useState<EditorContext>({});
-
   const { messages, isStreaming, send, stop } = useChat({
     activeSessionId: sessionId,
     onClaudeSessionId: handleClaudeSessionId,
-    editorContext: editorCtx,
   });
 
   // ─── Media ───
@@ -64,35 +61,82 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [fps, setFps] = useState(25);
+  const [fps, setFps] = useState(DEFAULT_FPS);
+  const [isTimingReady, setIsTimingReady] = useState(false);
 
   // ─── Markers ───
-  const [markers, setMarkers] = useState<Marker>({ inTime: null, outTime: null });
+  const [markers, setMarkers] = useState<Marker>({ inFrame: null, outFrame: null });
+
+  const syncCurrentTime = useCallback((nextTime: number) => {
+    setCurrentTime(nextTime);
+  }, []);
+
+  const handlePreviewTimeUpdate = useCallback((nextTime: number) => {
+    syncCurrentTime(nextTime);
+  }, [syncCurrentTime]);
 
   const handleSeek = useCallback((t: number) => {
     previewRef.current?.seekTo(t);
-    setCurrentTime(t);
-  }, []);
+    syncCurrentTime(t);
+  }, [syncCurrentTime]);
 
   const handleSetIn = useCallback(() => {
-    setMarkers((m) => ({ ...m, inTime: currentTime }));
-  }, [currentTime]);
+    if (activeMedia?.kind === "video" && !isTimingReady) return;
+    const exactTime = previewRef.current?.getCurrentTime() ?? currentTime;
+    syncCurrentTime(exactTime);
+    setMarkers((m) => ({ ...m, inFrame: secondsToFrame(exactTime, fps) }));
+  }, [activeMedia?.kind, currentTime, fps, isTimingReady, syncCurrentTime]);
 
   const handleSetOut = useCallback(() => {
-    setMarkers((m) => ({ ...m, outTime: currentTime }));
-  }, [currentTime]);
+    if (activeMedia?.kind === "video" && !isTimingReady) return;
+    const exactTime = previewRef.current?.getCurrentTime() ?? currentTime;
+    syncCurrentTime(exactTime);
+    setMarkers((m) => ({ ...m, outFrame: secondsToFrame(exactTime, fps) }));
+  }, [activeMedia?.kind, currentTime, fps, isTimingReady, syncCurrentTime]);
 
   const handleClearMarkers = useCallback(() => {
-    setMarkers({ inTime: null, outTime: null });
+    setMarkers({ inFrame: null, outFrame: null });
   }, []);
 
   // Reset on media change
   useEffect(() => {
-    setMarkers({ inTime: null, outTime: null });
+    setMarkers({ inFrame: null, outFrame: null });
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
+    setIsTimingReady(false);
   }, [activeMedia]);
+
+  useEffect(() => {
+    if (!sessionId || activeMedia?.kind !== "video") {
+      setFps(DEFAULT_FPS);
+      setIsTimingReady(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/workspace/media-info?sessionId=${sessionId}&path=${encodeURIComponent(activeMedia.path)}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) return;
+
+        const data = await res.json() as { fps?: number | null };
+        const nextFps = normalizeFps(data.fps);
+        setFps(nextFps);
+        setIsTimingReady(true);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
+        setFps(DEFAULT_FPS);
+        setIsTimingReady(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [activeMedia, sessionId]);
 
   // ─── Build timeline tracks from active media ───
   const tracks: TimelineTrack[] = useMemo(() => {
@@ -154,6 +198,7 @@ export default function Home() {
             handleSeek(Math.max(0, currentTime - 1));
           } else {
             previewRef.current?.stepBackward();
+            syncCurrentTime(previewRef.current?.getCurrentTime() ?? currentTime);
           }
           break;
         case "ArrowRight":
@@ -162,6 +207,7 @@ export default function Home() {
             handleSeek(Math.min(duration, currentTime + 1));
           } else {
             previewRef.current?.stepForward();
+            syncCurrentTime(previewRef.current?.getCurrentTime() ?? currentTime);
           }
           break;
         case "Escape":
@@ -171,39 +217,31 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [currentTime, duration, handleSeek, handleSetIn, handleSetOut, handleClearMarkers]);
-
-  // ─── Sync editor context for agent ───
-  useEffect(() => {
-    const sel = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
-      ? { inSeconds: markers.inTime, outSeconds: markers.outTime }
-      : undefined;
-    setEditorCtx((prev) => ({
-      ...prev,
-      activeVideo: activeMedia?.kind === "video" ? activeMedia.name : undefined,
-      activeVideoPath: activeMedia?.kind === "video" ? activeMedia.path : undefined,
-      selection: sel,
-      duration: duration || undefined,
-      fps: fps || undefined,
-    }));
-  }, [activeMedia, markers, duration, fps]);
+  }, [currentTime, duration, handleSeek, handleSetIn, handleSetOut, handleClearMarkers, syncCurrentTime]);
 
   // ─── Chat with selection context ───
-  const selectionForChat = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
-    ? { inSeconds: markers.inTime, outSeconds: markers.outTime }
-    : null;
+  const selectionForChat = useMemo(
+    () => buildSelectionRange(markers.inFrame, markers.outFrame, fps),
+    [fps, markers.inFrame, markers.outFrame]
+  );
+
+  const editorContext = useMemo<EditorContext>(() => ({
+    activeVideo: activeMedia?.kind === "video" ? activeMedia.name : undefined,
+    activeVideoPath: activeMedia?.kind === "video" ? activeMedia.path : undefined,
+    selection: selectionForChat ?? undefined,
+    duration: duration || undefined,
+    fps: fps || undefined,
+  }), [activeMedia, duration, fps, selectionForChat]);
 
   const isFirstMsg = useRef(true);
   useEffect(() => { isFirstMsg.current = true; }, [sessionId]);
 
   const handleSend = useCallback((input: string, referencedFiles?: string[]) => {
-    // Update editor context with referenced files before sending
-    if (referencedFiles?.length) {
-      setEditorCtx((prev) => ({ ...prev, referencedFiles }));
-    } else {
-      setEditorCtx((prev) => ({ ...prev, referencedFiles: undefined }));
-    }
-    send(input);
+    const contextForSend: EditorContext = {
+      ...editorContext,
+      referencedFiles: referencedFiles?.length ? referencedFiles : undefined,
+    };
+    send(input, contextForSend);
 
     if (isFirstMsg.current && sessionId) {
       isFirstMsg.current = false;
@@ -214,7 +252,7 @@ export default function Home() {
         body: JSON.stringify({ title }),
       }).catch(() => {});
     }
-  }, [send, selectionForChat, activeMedia, sessionId]);
+  }, [editorContext, send, sessionId]);
 
   return (
     <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
@@ -234,7 +272,7 @@ export default function Home() {
             ref={previewRef}
             src={activeMedia?.kind === "video" ? activeMedia.url : null}
             fps={fps}
-            onTimeUpdate={setCurrentTime}
+            onTimeUpdate={handlePreviewTimeUpdate}
             onDurationChange={setDuration}
             onPlayStateChange={setIsPlaying}
             onFpsDetected={setFps}

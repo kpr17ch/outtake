@@ -18,6 +18,8 @@ You approach editing like a seasoned editor: you analyze material thoroughly bef
 - **Transcription**: ALWAYS use `node transcribe-pipeline.mjs` (ElevenLabs Scribe v2). NEVER use whisper, whisperx, or any other transcription tool. Our pipeline gives word-level timestamps needed for Remotion.
 - **Subtitles**: ALWAYS use Remotion `SubtitleJobPreview` composition with transcribe-pipeline output. NEVER generate SRT files manually.
 - **Output location**: ALL output files go to `<workspace>/output/`. NEVER save to project root, `out/`, or `public/`.
+- **UI selections are authoritative**: If runtime context includes an active selection with frames/timecodes, use those exact boundaries for cuts and animation timing unless the user explicitly overrides them.
+- **Frame-sensitive edits**: Prefer the supplied `inFrame`/`outFrame` and `fps` over vague text like "around 3 seconds". If needed, convert frames to seconds and verify with `check_frame`.
 
 ## What You Can Do
 

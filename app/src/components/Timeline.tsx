@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef } from "react";
+import { formatTimecode, frameToSeconds, secondsToFrame } from "@/lib/timecode";
 
 // ─── Types matching Person 3's domain model ───
 
@@ -21,8 +22,8 @@ export interface TimelineTrack {
 }
 
 export interface Marker {
-  inTime: number | null;
-  outTime: number | null;
+  inFrame: number | null;
+  outFrame: number | null;
 }
 
 interface TimelineProps {
@@ -37,16 +38,6 @@ interface TimelineProps {
   onSetIn: () => void;
   onSetOut: () => void;
   onClearMarkers: () => void;
-}
-
-/** Format as MM:SS:FF (frame-based timecode) */
-function fmt(seconds: number, fps: number): string {
-  const totalFrames = Math.round(seconds * fps);
-  const f = totalFrames % fps;
-  const totalSec = Math.floor(totalFrames / fps);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
 }
 
 function fmtShort(seconds: number): string {
@@ -71,8 +62,14 @@ export default function Timeline({
   const trackAreaRef = useRef<HTMLDivElement>(null);
 
   const pct = useMemo(() => (duration > 0 ? (currentTime / duration) * 100 : 0), [currentTime, duration]);
-  const inPct = useMemo(() => (markers.inTime !== null && duration > 0 ? (markers.inTime / duration) * 100 : null), [markers.inTime, duration]);
-  const outPct = useMemo(() => (markers.outTime !== null && duration > 0 ? (markers.outTime / duration) * 100 : null), [markers.outTime, duration]);
+  const inPct = useMemo(() => {
+    if (markers.inFrame === null || duration <= 0) return null;
+    return (frameToSeconds(markers.inFrame, fps) / duration) * 100;
+  }, [duration, fps, markers.inFrame]);
+  const outPct = useMemo(() => {
+    if (markers.outFrame === null || duration <= 0) return null;
+    return (frameToSeconds(markers.outFrame, fps) / duration) * 100;
+  }, [duration, fps, markers.outFrame]);
 
   const handleTrackClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -95,9 +92,9 @@ export default function Timeline({
   }, [duration]);
 
   const selectionInfo = useMemo(() => {
-    if (markers.inTime === null || markers.outTime === null) return null;
-    return `${fmt(markers.inTime, fps)} → ${fmt(markers.outTime, fps)} (${(markers.outTime - markers.inTime).toFixed(1)}s)`;
-  }, [markers]);
+    if (markers.inFrame === null || markers.outFrame === null) return null;
+    return `${formatTimecode(markers.inFrame, fps)} → ${formatTimecode(markers.outFrame, fps)} (${frameToSeconds(markers.outFrame - markers.inFrame, fps).toFixed(2)}s)`;
+  }, [fps, markers]);
 
   const TRACK_COLORS: Record<string, { bg: string; border: string; text: string }> = {
     video: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", text: "var(--accent)" },
@@ -118,19 +115,21 @@ export default function Timeline({
             <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M4 2.5v9l7-4.5L4 2.5z" /></svg>
           )}
         </button>
-        <span className="text-[11px] font-mono" style={{ color: "var(--text-secondary)" }}>{fmt(currentTime, fps)} / {fmt(duration, fps)}</span>
+        <span className="text-[11px] font-mono" style={{ color: "var(--text-secondary)" }}>
+          {formatTimecode(secondsToFrame(currentTime, fps), fps)} / {formatTimecode(secondsToFrame(duration, fps), fps)}
+        </span>
         <div className="flex-1" />
         <button onClick={onSetIn} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
-          background: markers.inTime !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
-          color: markers.inTime !== null ? "var(--accent)" : "var(--text-tertiary)",
+          background: markers.inFrame !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
+          color: markers.inFrame !== null ? "var(--accent)" : "var(--text-tertiary)",
           border: "1px solid var(--border-subtle)",
-        }} title="Set In (I)">I {markers.inTime !== null ? fmt(markers.inTime, fps) : "—"}</button>
+        }} title="Set In (I)">I {markers.inFrame !== null ? formatTimecode(markers.inFrame, fps) : "—"}</button>
         <button onClick={onSetOut} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
-          background: markers.outTime !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
-          color: markers.outTime !== null ? "var(--accent)" : "var(--text-tertiary)",
+          background: markers.outFrame !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
+          color: markers.outFrame !== null ? "var(--accent)" : "var(--text-tertiary)",
           border: "1px solid var(--border-subtle)",
-        }} title="Set Out (O)">O {markers.outTime !== null ? fmt(markers.outTime, fps) : "—"}</button>
-        {(markers.inTime !== null || markers.outTime !== null) && (
+        }} title="Set Out (O)">O {markers.outFrame !== null ? formatTimecode(markers.outFrame, fps) : "—"}</button>
+        {(markers.inFrame !== null || markers.outFrame !== null) && (
           <button onClick={onClearMarkers} className="text-[10px] cursor-pointer" style={{ color: "var(--text-tertiary)" }}>✕</button>
         )}
       </div>

@@ -2,11 +2,12 @@
 
 import { useState, useRef, useCallback } from "react";
 import type { ChatMessage, ToolCall } from "./types";
+import type { SelectionRange } from "./timecode";
 
 export interface EditorContext {
   activeVideo?: string;
   activeVideoPath?: string;
-  selection?: { inSeconds: number; outSeconds: number };
+  selection?: SelectionRange;
   duration?: number;
   fps?: number;
   referencedFiles?: string[];
@@ -113,7 +114,7 @@ export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: U
   );
 
   const send = useCallback(
-    async (input: string) => {
+    async (input: string, editorContextOverride?: EditorContext) => {
       if (!input.trim() || isStreaming) return;
 
       const ts = new Date().toLocaleTimeString("de-DE", {
@@ -149,7 +150,7 @@ export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: U
           body: JSON.stringify({
             message: input.trim(),
             sessionId: activeSessionId,
-            editorContext,
+            editorContext: editorContextOverride ?? editorContext,
           }),
           signal: abortRef.current.signal,
         });

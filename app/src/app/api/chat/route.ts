@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { adaptCursorAgentLine } from "@/lib/cursor-stream-adapter";
+import type { SelectionRange } from "@/lib/timecode";
 import { resolveWorkspaceContext } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export const maxDuration = 300;
 interface EditorContext {
   activeVideo?: string;
   activeVideoPath?: string;
-  selection?: { inSeconds: number; outSeconds: number };
+  selection?: SelectionRange;
   duration?: number;
   fps?: number;
   referencedFiles?: string[];
@@ -84,12 +85,24 @@ export async function POST(req: Request) {
         if (ctx.duration) workspaceLines.push(`Duration: ${ctx.duration.toFixed(2)}s`);
         if (ctx.fps) workspaceLines.push(`FPS: ${ctx.fps}`);
         if (ctx.selection) {
-          workspaceLines.push(
-            `**Active selection: ${ctx.selection.inSeconds.toFixed(2)}s → ${ctx.selection.outSeconds.toFixed(2)}s** (${(ctx.selection.outSeconds - ctx.selection.inSeconds).toFixed(1)}s)`
-          );
-          workspaceLines.push(
-            `When the user says "this", "the selection", "this part", "here" etc., they mean this time range in this video.`
-          );
+          workspaceLines.push(`## Active Selection`);
+          workspaceLines.push(`This UI selection is authoritative for frame-accurate edits unless the user explicitly overrides it.`);
+          workspaceLines.push(`Use these exact boundaries for cuts, animations, and timing-sensitive effects:`);
+          workspaceLines.push("```json");
+          workspaceLines.push(JSON.stringify({
+            inFrame: ctx.selection.inFrame,
+            outFrame: ctx.selection.outFrame,
+            inSeconds: Number(ctx.selection.inSeconds.toFixed(6)),
+            outSeconds: Number(ctx.selection.outSeconds.toFixed(6)),
+            timecodeIn: ctx.selection.timecodeIn,
+            timecodeOut: ctx.selection.timecodeOut,
+            durationFrames: ctx.selection.durationFrames,
+            durationSeconds: Number(ctx.selection.durationSeconds.toFixed(6)),
+            fps: ctx.selection.fps,
+          }, null, 2));
+          workspaceLines.push("```");
+          workspaceLines.push(`When the user says "this", "the selection", "this part", or "here", they mean this exact range.`);
+          workspaceLines.push(`Do not infer alternate timestamps from transcript text when this selection is present.`);
         }
         workspaceLines.push(
           `When the user says "the video", "das Video" etc. without specifying which one, they mean this active video.`
@@ -160,7 +173,6 @@ export async function POST(req: Request) {
           "stream-json",
           "--force",
           "--approve-mcps",
-          "--trust",
           "--workspace",
           workspaceCwd,
         ];
@@ -196,6 +208,7 @@ export async function POST(req: Request) {
       });
 
       let buffer = "";
+      let lastStderr = "";
       const logLabel = backend === "claude" ? "claude" : "cursor-agent";
 
       proc.stdout.on("data", (chunk: Buffer) => {
@@ -217,6 +230,7 @@ export async function POST(req: Request) {
       proc.stderr.on("data", (chunk: Buffer) => {
         const text = chunk.toString().trim();
         if (text) {
+          lastStderr = text;
           console.error(`[${logLabel} stderr]`, text);
         }
       });
@@ -235,7 +249,7 @@ export async function POST(req: Request) {
             encoder.encode(
               `data: ${JSON.stringify({
                 type: "error",
-                message: `${logLabel} exited with code ${code}`,
+                message: lastStderr || `${logLabel} exited with code ${code}`,
               })}\n\n`
             )
           );

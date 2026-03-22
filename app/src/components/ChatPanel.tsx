@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, type ComponentPropsWithoutRef
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCall } from "@/lib/types";
+import type { SelectionRange } from "@/lib/timecode";
 
 // --- Markdown components ---
 
@@ -250,7 +251,7 @@ interface ChatPanelProps {
   isStreaming: boolean;
   onSend: (input: string, referencedFiles?: string[]) => void;
   onStop: () => void;
-  selection?: { inSeconds: number; outSeconds: number } | null;
+  selection?: SelectionRange | null;
   mediaFiles?: MentionableFile[];
 }
 
@@ -416,8 +417,10 @@ export default function ChatPanel({
             className="flex items-center gap-2 mb-1.5 px-2 py-1 rounded text-[10px] font-mono"
             style={{ background: "var(--accent-surface)", color: "var(--accent)" }}
           >
-            <span>▸ {selection.inSeconds.toFixed(1)}s → {selection.outSeconds.toFixed(1)}s</span>
-            <span style={{ color: "var(--text-tertiary)" }}>({(selection.outSeconds - selection.inSeconds).toFixed(1)}s)</span>
+            <span>▸ {selection.timecodeIn} → {selection.timecodeOut}</span>
+            <span style={{ color: "var(--text-tertiary)" }}>
+              ({selection.durationFrames}f / {selection.durationSeconds.toFixed(2)}s)
+            </span>
           </div>
         )}
         {/* Referenced files tags */}

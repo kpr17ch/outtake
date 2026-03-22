@@ -17,6 +17,9 @@ venv/
 # Work directories
 raw/
 workspace/
+!app/src/app/api/workspace/
+!app/src/app/api/workspace/media-info/
+!app/src/app/api/workspace/media-info/route.ts
 output/
 assets/
 transcripts/
