@@ -1,6 +1,10 @@
-# Outtake
+<p align="center">
+  <img src="logo.png" alt="Outtake" width="400">
+</p>
 
-AI video editing agent with a web UI. Upload footage, chat with an AI editor, and get cuts, subtitles, motion graphics, sound effects, and AI-generated clips back.
+<p align="center">AI video editing agent with a web UI.</p>
+
+# Upload footage, chat with an AI editor, and get cuts, subtitles, motion graphics, sound effects, and AI-generated clips back.
 
 ## Quick Start
 
