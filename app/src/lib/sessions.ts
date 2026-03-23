@@ -12,7 +12,7 @@ export interface SessionData {
   title: string;
   createdAt: string;
   updatedAt: string;
-  claudeSessionId?: string;
+  agentSessionId?: string;
   workspacePath: string;
 }
 
@@ -98,7 +98,7 @@ export async function getSession(id: string): Promise<SessionData | null> {
 
 export async function updateSession(
   id: string,
-  updates: Partial<Pick<SessionData, "title" | "claudeSessionId">>
+  updates: Partial<Pick<SessionData, "title" | "agentSessionId">>
 ): Promise<SessionData | null> {
   return enqueueSessionWrite(id, async () => {
     const session = await getSession(id);
@@ -197,9 +197,9 @@ function normalizeSessionData(id: string, parsed: unknown): SessionData | null {
 
   const record = parsed as Record<string, unknown>;
   const now = new Date().toISOString();
-  const claudeSessionId =
-    typeof record.claudeSessionId === "string" && record.claudeSessionId
-      ? record.claudeSessionId
+  const agentSessionId =
+    typeof record.agentSessionId === "string" && record.agentSessionId
+      ? record.agentSessionId
       : undefined;
 
   return {
@@ -216,7 +216,7 @@ function normalizeSessionData(id: string, parsed: unknown): SessionData | null {
       typeof record.updatedAt === "string" && record.updatedAt
         ? record.updatedAt
         : now,
-    claudeSessionId,
+    agentSessionId,
     workspacePath: sessionWorkspacePath(id),
   };
 }

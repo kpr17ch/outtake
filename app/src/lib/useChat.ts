@@ -14,22 +14,22 @@ export interface EditorContext {
 
 interface UseChatOptions {
   activeSessionId: string | null;
-  onClaudeSessionId?: (claudeSessionId: string) => void;
+  onAgentSessionId?: (agentSessionId: string) => void;
   editorContext?: EditorContext;
 }
 
-export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: UseChatOptions) {
+export function useChat({ activeSessionId, onAgentSessionId, editorContext }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const handleEvent = useCallback(
     (msg: Record<string, unknown>, assistantId: string) => {
-      // Capture Claude session ID and save it back to the session
+      // Capture agent session ID and save it back to the session
       if (msg.type === "system" && msg.subtype === "init") {
-        const claudeSessionId = msg.session_id as string;
-        if (claudeSessionId && activeSessionId) {
-          onClaudeSessionId?.(claudeSessionId);
+        const agentSessionId = msg.session_id as string;
+        if (agentSessionId && activeSessionId) {
+          onAgentSessionId?.(agentSessionId);
         }
         return;
       }
@@ -65,7 +65,7 @@ export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: U
         return;
       }
 
-      // Tool result — mark tool as done (optional tool_use_id for Cursor-adapter streams)
+      // Tool result — mark tool as done (optional tool_use_id for adapted streams)
       if (msg.type === "user" && msg.tool_use_result !== undefined) {
         const result = msg.tool_use_result;
         const toolUseId =
@@ -109,7 +109,7 @@ export function useChat({ activeSessionId, onClaudeSessionId, editorContext }: U
         );
       }
     },
-    [activeSessionId, onClaudeSessionId]
+    [activeSessionId, onAgentSessionId]
   );
 
   const send = useCallback(

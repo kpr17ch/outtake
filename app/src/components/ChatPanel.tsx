@@ -204,7 +204,7 @@ function Message({ message }: { message: ChatMessage }) {
 
   return (
     <div className="animate-fade-in-up mb-5">
-      {/* Thinking — just text, no background, like Cursor */}
+      {/* Thinking — just text, no background */}
       {message.isThinking && !hasContent && !hasTools && (
         <p className="text-sm" style={{ color: "var(--text-tertiary)", animation: "pulse-soft 2s ease-in-out infinite" }}>
           Thinking...

@@ -2,7 +2,7 @@
 
 Deterministic, extensible edit-core for AI-first video timeline editing.
 
-Outtake Edit Core is the "operating system" between the AI-brain and the video editing modules. It owns the single source of truth for timeline state, enforces a typed operation pipeline, and provides full undo/redo through snapshot-based restore — comparable to how Cursor manages code edits, but for video.
+Outtake Edit Core is the "operating system" between the AI brain and the video editing modules. It owns the single source of truth for timeline state, enforces a typed operation pipeline, and provides full undo/redo through snapshot-based restore.
 
 ---
 

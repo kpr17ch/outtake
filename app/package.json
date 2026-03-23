@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
     "@remotion/media": "^4.0.438",
     "@remotion/player": "^4.0.438",
     "next": "16.2.1",

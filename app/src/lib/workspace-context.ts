@@ -7,7 +7,7 @@ import {
 export interface WorkspaceContext {
   sessionId: string | null;
   workspacePath: string;
-  claudeSessionId?: string;
+  agentSessionId?: string;
 }
 
 export async function resolveWorkspaceContext(
@@ -33,6 +33,6 @@ export async function resolveWorkspaceContext(
   return {
     sessionId: session.id,
     workspacePath: session.workspacePath,
-    claudeSessionId: session.claudeSessionId,
+    agentSessionId: session.agentSessionId,
   };
 }

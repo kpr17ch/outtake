@@ -35,13 +35,13 @@ export default function Home() {
     })();
   }, []);
 
-  const handleClaudeSessionId = useCallback(async (id: string) => {
+  const handleAgentSessionId = useCallback(async (id: string) => {
     if (!sessionId) return;
     try {
       await fetch(`/api/sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claudeSessionId: id }),
+        body: JSON.stringify({ agentSessionId: id }),
       });
     } catch { /* ignore */ }
   }, [sessionId]);
@@ -51,7 +51,7 @@ export default function Home() {
 
   const { messages, isStreaming, send, stop } = useChat({
     activeSessionId: sessionId,
-    onClaudeSessionId: handleClaudeSessionId,
+    onAgentSessionId: handleAgentSessionId,
     editorContext: editorCtx,
   });
 

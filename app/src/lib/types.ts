@@ -22,6 +22,6 @@ export interface Session {
   title: string;
   createdAt: string;
   updatedAt: string;
-  claudeSessionId?: string;
+  agentSessionId?: string;
   workspacePath: string;
 }

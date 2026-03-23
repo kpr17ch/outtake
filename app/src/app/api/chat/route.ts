@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { adaptCursorAgentLine } from "@/lib/cursor-stream-adapter";
+import { adaptAgentStreamLine } from "@/lib/stream-adapter";
 import { resolveWorkspaceContext } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
@@ -41,10 +41,9 @@ export async function POST(req: Request) {
   }
 
   const workspaceCwd = workspace.workspacePath;
-  const agentSessionId = workspace?.claudeSessionId;
+  const agentSessionId = workspace?.agentSessionId;
 
   const encoder = new TextEncoder();
-  const backend = (process.env.OUTTAKE_AGENT_BACKEND || "cursor").toLowerCase();
 
   const stream = new ReadableStream({
     start(controller) {
@@ -109,75 +108,40 @@ export async function POST(req: Request) {
 
       const workspaceInfo = workspaceLines.join("\n");
 
-      let bin: string;
-      let args: string[];
-      let env: NodeJS.ProcessEnv;
+      const systemBody = loadSystemPrompt(projectRoot);
+      const composedPrompt = [
+        systemBody.trim(),
+        workspaceInfo,
+        `---`,
+        `User message:`,
+        message.trim(),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
 
-      if (backend === "claude") {
-        args = [
-          "-p",
-          message,
-          "--output-format",
-          "stream-json",
-          "--dangerously-skip-permissions",
-          "--model",
-          process.env.CLAUDE_MODEL || "claude-opus-4-6",
-          "--verbose",
-          "--setting-sources",
-          "project",
-          "--tools",
-          "Bash,Read,Write,Edit,Glob,Grep",
-          "--disable-slash-commands",
-          "--system-prompt-file",
-          resolve(projectRoot, "SYSTEM_PROMPT.md"),
-          "--append-system-prompt",
-          workspaceInfo,
-          "--mcp-config",
-          resolve(projectRoot, "mcp-config.json"),
-        ];
-        if (agentSessionId) {
-          args.push("--resume", agentSessionId);
-        }
-        bin = process.env.CLAUDE_BIN || "claude";
-        env = { ...process.env };
-        delete env.ANTHROPIC_API_KEY;
-      } else {
-        const systemBody = loadSystemPrompt(projectRoot);
-        const composedPrompt = [
-          systemBody.trim(),
-          workspaceInfo,
-          `---`,
-          `User message:`,
-          message.trim(),
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-
-        args = [
-          "-p",
-          composedPrompt,
-          "--output-format",
-          "stream-json",
-          "--force",
-          "--approve-mcps",
-          "--trust",
-          "--workspace",
-          workspaceCwd,
-        ];
-        const model = process.env.CURSOR_AGENT_MODEL?.trim();
-        if (model) {
-          args.push("--model", model);
-        }
-        if (agentSessionId) {
-          args.push("--resume", agentSessionId);
-        }
-        bin = process.env.CURSOR_AGENT_BIN || "agent";
-        env = { ...process.env };
+      const args = [
+        "-p",
+        composedPrompt,
+        "--output-format",
+        "stream-json",
+        "--force",
+        "--approve-mcps",
+        "--trust",
+        "--workspace",
+        workspaceCwd,
+      ];
+      const model = process.env.AGENT_MODEL?.trim();
+      if (model) {
+        args.push("--model", model);
       }
+      if (agentSessionId) {
+        args.push("--resume", agentSessionId);
+      }
+      const bin = process.env.AGENT_BIN || "agent";
+      const env = { ...process.env };
 
       const enqueueAdaptedLine = (line: string) => {
-        const outs =
-          backend === "cursor" ? adaptCursorAgentLine(line) : [line];
+        const outs = adaptAgentStreamLine(line);
         for (const out of outs) {
           if (!out.trim()) continue;
           try {
@@ -196,7 +160,7 @@ export async function POST(req: Request) {
       });
 
       let buffer = "";
-      const logLabel = backend === "claude" ? "claude" : "cursor-agent";
+      const logLabel = "agent-cli";
 
       proc.stdout.on("data", (chunk: Buffer) => {
         buffer += chunk.toString();

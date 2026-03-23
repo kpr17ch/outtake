@@ -1,11 +1,9 @@
 import { randomUUID } from "crypto";
 
 /**
- * Cursor Agent CLI `--output-format stream-json` uses `tool_call` lifecycle events.
- * The Outtake UI expects Claude Code-style `assistant` (tool_use blocks) + `user` (tool_use_result).
- * This adapter converts per line (NDJSON) where needed.
+ * Normalizes agent CLI stream-json tool lifecycle events into the message
+ * shapes used by the UI.
  */
-
 function mapToolKeyToName(toolKey: string): string {
   switch (toolKey) {
     case "readToolCall":
@@ -69,11 +67,7 @@ function formatToolResult(toolCall: unknown): string {
   return JSON.stringify(toolCall, null, 2);
 }
 
-/**
- * Returns NDJSON lines (without trailing newline) to forward to the client, or empty if the
- * event should be dropped (duplicates / shapes the UI ignores).
- */
-export function adaptCursorAgentLine(line: string): string[] {
+export function adaptAgentStreamLine(line: string): string[] {
   let ev: Record<string, unknown>;
   try {
     ev = JSON.parse(line) as Record<string, unknown>;
@@ -82,39 +76,32 @@ export function adaptCursorAgentLine(line: string): string[] {
   }
 
   const t = ev.type;
-
   if (t === "tool_call") {
     const subtype = ev.subtype;
-    const callId =
-      (typeof ev.call_id === "string" && ev.call_id) || randomUUID();
+    const callId = (typeof ev.call_id === "string" && ev.call_id) || randomUUID();
     const toolCall = ev.tool_call;
 
     if (subtype === "started") {
       const { name, input } = parseToolCallShape(toolCall);
-      const synthetic = {
-        type: "assistant",
-        message: {
-          role: "assistant",
-          content: [
-            {
-              type: "tool_use",
-              id: callId,
-              name,
-              input,
-            },
-          ],
-        },
-      };
-      return [JSON.stringify(synthetic)];
+      return [
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            role: "assistant",
+            content: [{ type: "tool_use", id: callId, name, input }],
+          },
+        }),
+      ];
     }
 
     if (subtype === "completed") {
-      const synthetic = {
-        type: "user",
-        tool_use_id: callId,
-        tool_use_result: formatToolResult(toolCall),
-      };
-      return [JSON.stringify(synthetic)];
+      return [
+        JSON.stringify({
+          type: "user",
+          tool_use_id: callId,
+          tool_use_result: formatToolResult(toolCall),
+        }),
+      ];
     }
 
     return [];
@@ -123,17 +110,10 @@ export function adaptCursorAgentLine(line: string): string[] {
   if (t === "assistant") {
     const msg = ev.message as Record<string, unknown> | undefined;
     const content = msg?.content as Array<Record<string, unknown>> | undefined;
-    const onlyText =
-      content?.length &&
-      content.every((c) => c.type === "text");
-    if (onlyText) {
-      return [];
-    }
+    const onlyText = content?.length && content.every((c) => c.type === "text");
+    if (onlyText) return [];
   }
 
-  if (t === "user") {
-    return [];
-  }
-
+  if (t === "user") return [];
   return [line];
 }
