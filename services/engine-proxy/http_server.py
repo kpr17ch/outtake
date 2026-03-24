@@ -76,8 +76,15 @@ def list_tools(payload: SessionPayload) -> dict[str, Any]:
 @app.post("/engine/tools/call")
 def call_tool(payload: ToolCallPayload) -> dict[str, Any]:
     sess = _get_session(payload.session_id)
-    with sess.lock:
-        response = sess.proxy.call_tool(payload.op_type, payload.arguments)
+    try:
+        with sess.lock:
+            response = sess.proxy.call_tool(payload.op_type, payload.arguments)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"result": response.result}
 
 

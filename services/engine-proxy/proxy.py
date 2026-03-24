@@ -62,7 +62,14 @@ class EngineProxy:
         operation_args = dict(arguments)
         if "origin_ref_id" in arguments and "input_file" not in arguments:
             origin_ref_id = arguments["origin_ref_id"]
-            active = self.state.file_versions.get_active_version(origin_ref_id)
+            try:
+                active = self.state.file_versions.get_active_version(origin_ref_id)
+            except KeyError as exc:
+                raise ValueError(
+                    f"No active file for origin_ref_id={origin_ref_id!r}. "
+                    "Pass absolute input_file/output_file paths under the workspace, or open a video in the editor so "
+                    "'active_video' is registered."
+                ) from exc
             operation_args["input_file"] = active.file_path
         schema_props = entry.input_schema.get("properties", {})
         if isinstance(schema_props, dict) and schema_props:

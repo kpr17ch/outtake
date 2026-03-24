@@ -24,6 +24,7 @@ services:
       - OUTTAKE_CWD=/app/workspace
       - AGENT_BACKEND=langgraph
       - ENGINE_PROXY_URL=http://engine-proxy:8200
+      - FFMPEG_MCP_URL=http://ffmpeg-mcp:8100/mcp
     depends_on:
       engine-proxy:
         condition: service_started

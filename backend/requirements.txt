@@ -8,3 +8,5 @@ langchain-openai
 langchain-anthropic
 langchain-google-genai
 langchain-groq
+deepagents>=0.4.0
+langchain-mcp-adapters>=0.1.0
