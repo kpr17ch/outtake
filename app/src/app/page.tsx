@@ -14,6 +14,10 @@ const MediaBin = dynamic(() => import("@/components/MediaBin"), { ssr: false });
 export default function Home() {
   // ─── Session ───
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"editor" | "settings">("editor");
+  const [provider, setProvider] = useState("openai");
+  const [model, setModel] = useState("gpt-4o-mini");
+  const [apiKey, setApiKey] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -34,6 +38,28 @@ export default function Home() {
       } catch { /* ignore */ }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`/api/sessions/${sessionId}/settings`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (!s) return;
+        if (typeof s.provider === "string") setProvider(s.provider);
+        if (typeof s.model === "string") setModel(s.model);
+      })
+      .catch(() => {});
+  }, [sessionId]);
+
+  const saveSettings = useCallback(async () => {
+    if (!sessionId) return;
+    await fetch(`/api/sessions/${sessionId}/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, model, apiKey }),
+    }).catch(() => {});
+    setApiKey("");
+  }, [sessionId, provider, model, apiKey]);
 
   const handleAgentSessionId = useCallback(async (id: string) => {
     if (!sessionId) return;
@@ -217,58 +243,129 @@ export default function Home() {
   }, [send, selectionForChat, activeMedia, sessionId]);
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: "var(--bg-base)" }}>
-      {/* Top: Media Bin + Preview */}
-      <div className="flex flex-1 min-h-0">
-        <div className="shrink-0" style={{ width: 200 }}>
-          <MediaBin
-            sessionId={sessionId}
-            activeItem={activeMedia}
-            onSelect={setActiveMedia}
-            onNewOutput={handleNewOutput}
-            onItemsChange={setAllMediaFiles}
-          />
+    <div
+      className="flex flex-col h-screen min-h-0 overflow-hidden"
+      style={{ background: "var(--bg-base)" }}
+    >
+      {/* Tabs — shrink-0 + z-index so nothing in the flex body paints above / blocks clicks */}
+      <header
+        className="shrink-0 z-30 relative flex items-center gap-2 px-3 py-2 border-b pointer-events-auto"
+        style={{ borderColor: "var(--border-subtle)", background: "var(--bg-base)" }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab("editor")}
+          className="text-xs px-3 py-1 rounded border cursor-pointer"
+          style={{ opacity: activeTab === "editor" ? 1 : 0.7 }}
+        >
+          Editor
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("settings")}
+          className="text-xs px-3 py-1 rounded border cursor-pointer"
+          style={{ opacity: activeTab === "settings" ? 1 : 0.7 }}
+        >
+          Settings
+        </button>
+      </header>
+
+      {activeTab === "settings" ? (
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          <div className="max-w-xl space-y-3">
+            <h2 className="text-sm font-semibold">Provider Settings</h2>
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full text-sm px-2 py-2 rounded bg-transparent border">
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+              <option value="google">google</option>
+              <option value="groq">groq</option>
+            </select>
+            <input
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="model"
+              className="w-full text-sm px-2 py-2 rounded bg-transparent border"
+            />
+            <input
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="api key (optional update)"
+              className="w-full text-sm px-2 py-2 rounded bg-transparent border"
+              type="password"
+            />
+            <button type="button" onClick={saveSettings} className="text-sm px-3 py-2 rounded border cursor-pointer">
+              Save Provider
+            </button>
+            {provider === "groq" ? (
+              <p className="text-xs opacity-70 mt-2">
+                Groq: use a vision-capable model for images (e.g.{" "}
+                <code className="text-[11px]">meta-llama/llama-4-scout-17b-16e-instruct</code>
+                ). Text-only models ignore attached images.
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <Preview
-            ref={previewRef}
-            src={activeMedia?.kind === "video" ? activeMedia.url : null}
+      ) : (
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <div className="shrink-0 flex flex-col min-h-0 overflow-hidden" style={{ width: 200 }}>
+              <MediaBin
+                sessionId={sessionId}
+                activeItem={activeMedia}
+                onSelect={setActiveMedia}
+                onNewOutput={handleNewOutput}
+                onItemsChange={setAllMediaFiles}
+              />
+            </div>
+            <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+              <Preview
+                ref={previewRef}
+                sessionId={sessionId}
+                src={activeMedia?.kind === "video" ? activeMedia.url : null}
+                fps={fps}
+                onTimeUpdate={setCurrentTime}
+                onDurationChange={setDuration}
+                onPlayStateChange={setIsPlaying}
+                onFpsDetected={setFps}
+              />
+            </div>
+          </div>
+
+          <Timeline
+            duration={duration}
+            currentTime={currentTime}
             fps={fps}
-            onTimeUpdate={setCurrentTime}
-            onDurationChange={setDuration}
-            onPlayStateChange={setIsPlaying}
-            onFpsDetected={setFps}
+            isPlaying={isPlaying}
+            markers={markers}
+            tracks={tracks}
+            onSeek={handleSeek}
+            onTogglePlay={() => previewRef.current?.toggle()}
+            onSetIn={handleSetIn}
+            onSetOut={handleSetOut}
+            onClearMarkers={handleClearMarkers}
           />
+
+          <div
+            className="shrink-0 flex flex-col min-h-0 overflow-hidden"
+            style={{
+              height: "min(40vh, 360px)",
+              minHeight: 180,
+              maxHeight: "45vh",
+              borderTop: "1px solid var(--border-subtle)",
+            }}
+          >
+            <ChatPanel
+              activeSessionId={sessionId}
+              messages={messages}
+              isStreaming={isStreaming}
+              onSend={handleSend}
+              onStop={stop}
+              selection={selectionForChat}
+              mediaFiles={allMediaFiles}
+            />
+          </div>
         </div>
-      </div>
-
-      {/* Timeline */}
-      <Timeline
-        duration={duration}
-        currentTime={currentTime}
-        fps={fps}
-        isPlaying={isPlaying}
-        markers={markers}
-        tracks={tracks}
-        onSeek={handleSeek}
-        onTogglePlay={() => previewRef.current?.toggle()}
-        onSetIn={handleSetIn}
-        onSetOut={handleSetOut}
-        onClearMarkers={handleClearMarkers}
-      />
-
-      {/* Chat */}
-      <div className="shrink-0" style={{ height: "35%", minHeight: 200, borderTop: "1px solid var(--border-subtle)" }}>
-        <ChatPanel
-          activeSessionId={sessionId}
-          messages={messages}
-          isStreaming={isStreaming}
-          onSend={handleSend}
-          onStop={stop}
-          selection={selectionForChat}
-          mediaFiles={allMediaFiles}
-        />
-      </div>
+      )}
     </div>
   );
 }

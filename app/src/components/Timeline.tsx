@@ -108,7 +108,7 @@ export default function Timeline({
     <div className="shrink-0 select-none" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--bg-surface)" }}>
       {/* Controls */}
       <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        <button onClick={onTogglePlay} className="cursor-pointer w-7 h-7 flex items-center justify-center rounded transition-colors" style={{ color: "var(--text-secondary)", background: "var(--bg-elevated)" }}
+        <button type="button" onClick={onTogglePlay} className="cursor-pointer w-7 h-7 flex items-center justify-center rounded transition-colors" style={{ color: "var(--text-secondary)", background: "var(--bg-elevated)" }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-overlay)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-elevated)"; }}
         >
@@ -120,18 +120,18 @@ export default function Timeline({
         </button>
         <span className="text-[11px] font-mono" style={{ color: "var(--text-secondary)" }}>{fmt(currentTime, fps)} / {fmt(duration, fps)}</span>
         <div className="flex-1" />
-        <button onClick={onSetIn} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
+        <button type="button" onClick={onSetIn} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
           background: markers.inTime !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
           color: markers.inTime !== null ? "var(--accent)" : "var(--text-tertiary)",
           border: "1px solid var(--border-subtle)",
         }} title="Set In (I)">I {markers.inTime !== null ? fmt(markers.inTime, fps) : "—"}</button>
-        <button onClick={onSetOut} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
+        <button type="button" onClick={onSetOut} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
           background: markers.outTime !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
           color: markers.outTime !== null ? "var(--accent)" : "var(--text-tertiary)",
           border: "1px solid var(--border-subtle)",
         }} title="Set Out (O)">O {markers.outTime !== null ? fmt(markers.outTime, fps) : "—"}</button>
         {(markers.inTime !== null || markers.outTime !== null) && (
-          <button onClick={onClearMarkers} className="text-[10px] cursor-pointer" style={{ color: "var(--text-tertiary)" }}>✕</button>
+          <button type="button" onClick={onClearMarkers} className="text-[10px] cursor-pointer" style={{ color: "var(--text-tertiary)" }}>✕</button>
         )}
       </div>
 

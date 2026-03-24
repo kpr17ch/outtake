@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { OUTTAKE_UPLOAD_COMPLETE_EVENT } from "@/components/Preview";
 
 export interface MediaItem {
   name: string;
@@ -36,6 +37,16 @@ function formatSize(bytes: number): string {
 export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput, onItemsChange }: MediaBinProps) {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    const clear = () => setIsDragOver(false);
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, []);
   const [uploading, setUploading] = useState(false);
   const prevOutputPaths = useRef<Set<string>>(new Set());
 
@@ -86,6 +97,14 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
     return () => clearInterval(iv);
   }, [fetchItems]);
 
+  useEffect(() => {
+    const onRemoteUpload = () => {
+      void fetchItems();
+    };
+    window.addEventListener(OUTTAKE_UPLOAD_COMPLETE_EVENT, onRemoteUpload);
+    return () => window.removeEventListener(OUTTAKE_UPLOAD_COMPLETE_EVENT, onRemoteUpload);
+  }, [fetchItems]);
+
   useEffect(() => { setItems([]); prevOutputPaths.current = new Set(); }, [sessionId]);
 
   const upload = useCallback(async (files: FileList) => {
@@ -113,9 +132,21 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
     >
       <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
         <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Media</span>
-        <label className="text-xs cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "var(--text-tertiary)", background: "var(--bg-elevated)" }}>
+        <label
+          htmlFor="mediabin-file-upload"
+          className="text-xs cursor-pointer px-1.5 py-0.5 rounded pointer-events-auto"
+          style={{ color: "var(--text-tertiary)", background: "var(--bg-elevated)" }}
+          aria-label="Upload media files"
+        >
           {uploading ? "..." : "+"}
-          <input type="file" className="hidden" accept="video/*,audio/*,image/*" multiple onChange={(e) => e.target.files && upload(e.target.files)} />
+          <input
+            id="mediabin-file-upload"
+            type="file"
+            className="hidden"
+            accept="video/*,audio/*,image/*"
+            multiple
+            onChange={(e) => e.target.files && upload(e.target.files)}
+          />
         </label>
       </div>
 
@@ -162,6 +193,7 @@ function FileRow({ item, active, onSelect }: { item: MediaItem; active: boolean;
   const icon = item.kind === "video" ? "🎬" : item.kind === "audio" ? "🎵" : "🖼";
   return (
     <button
+      type="button"
       onClick={() => onSelect(item)}
       className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left cursor-pointer transition-colors mb-0.5"
       style={{

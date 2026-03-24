@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+langgraph
+langchain
+langchain-openai
+langchain-anthropic
+langchain-google-genai
+langchain-groq

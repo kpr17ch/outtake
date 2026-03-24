@@ -143,6 +143,11 @@ export function useChat({ activeSessionId, onAgentSessionId, editorContext }: Us
       abortRef.current = new AbortController();
 
       try {
+        const imageInputs =
+          editorContext?.referencedFiles
+            ?.filter((f) => /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(f))
+            .map((f) => ({ url: `/api/workspace/files/${f}?sessionId=${activeSessionId || ""}` })) || [];
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -150,6 +155,7 @@ export function useChat({ activeSessionId, onAgentSessionId, editorContext }: Us
             message: input.trim(),
             sessionId: activeSessionId,
             editorContext,
+            imageInputs,
           }),
           signal: abortRef.current.signal,
         });

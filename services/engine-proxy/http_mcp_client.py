@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 from urllib import request
+from urllib.error import HTTPError
 
 
 class HttpMcpClient:
@@ -42,7 +43,7 @@ class HttpMcpClient:
             return result
         return {"result": result}
 
-    def _rpc(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _rpc(self, method: str, params: dict[str, Any], *, _retry: bool = True) -> dict[str, Any]:
         if self._session_id is None:
             self._initialize_session()
         self._id += 1
@@ -65,8 +66,15 @@ class HttpMcpClient:
             headers=headers,
             method="POST",
         )
-        with request.urlopen(req, timeout=60) as resp:
-            raw = resp.read().decode("utf-8")
+        try:
+            with request.urlopen(req, timeout=60) as resp:
+                raw = resp.read().decode("utf-8")
+        except HTTPError as exc:
+            # After ffmpeg-mcp restarts, stale mcp-session-id yields 404 on /mcp
+            if exc.code == 404 and _retry:
+                self._session_id = None
+                return self._rpc(method, params, _retry=False)
+            raise
         msg = self._decode_response(raw)
         if "error" in msg:
             raise RuntimeError(str(msg["error"]))

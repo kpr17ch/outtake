@@ -158,6 +158,7 @@ function ToolCallLine({ tool }: { tool: ToolCall }) {
   return (
     <div className="mb-px">
       <button
+        type="button"
         className="flex items-center gap-1.5 text-[12px] cursor-pointer py-0.5 w-full text-left"
         style={{ color: "var(--text-tertiary)" }}
         onClick={() => setOpen(!open)}
@@ -265,6 +266,16 @@ export default function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    const clear = () => setIsDragOver(false);
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, []);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -388,7 +399,7 @@ export default function ChatPanel({
 
   return (
     <div
-      className="flex flex-col h-full flex-1 min-w-0 relative"
+      className="flex flex-col h-full min-h-0 min-w-0 relative overflow-hidden"
       style={{ background: "var(--bg-base)" }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -428,7 +439,7 @@ export default function ChatPanel({
               return (
                 <span key={path} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono" style={{ background: "var(--accent-surface)", color: "var(--accent)" }}>
                   @{name}
-                  <button onClick={() => removeMention(path)} className="cursor-pointer opacity-60 hover:opacity-100">✕</button>
+                  <button type="button" onClick={() => removeMention(path)} className="cursor-pointer opacity-60 hover:opacity-100">✕</button>
                 </span>
               );
             })}
@@ -443,6 +454,7 @@ export default function ChatPanel({
             <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg overflow-hidden shadow-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", maxHeight: 200 }}>
               {filteredFiles.map((file, i) => (
                 <button
+                  type="button"
                   key={file.path}
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left cursor-pointer"
                   style={{
@@ -481,6 +493,7 @@ export default function ChatPanel({
           />
           {isStreaming ? (
             <button
+              type="button"
               onClick={onStop}
               className="p-2 cursor-pointer rounded transition-colors shrink-0"
               style={{ color: "var(--text-tertiary)" }}
@@ -493,6 +506,7 @@ export default function ChatPanel({
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleSend}
               className="p-2 cursor-pointer rounded transition-colors shrink-0"
               style={{ color: input.trim() ? "var(--text-secondary)" : "var(--text-tertiary)" }}

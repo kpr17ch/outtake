@@ -1,6 +1,9 @@
 "use client";
 
-import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useState } from "react";
+
+/** Dispatched after a successful /api/upload from Preview or elsewhere; MediaBin listens to refresh. */
+export const OUTTAKE_UPLOAD_COMPLETE_EVENT = "outtake-upload-complete";
 
 export interface PreviewHandle {
   seekTo: (seconds: number) => void;
@@ -14,6 +17,8 @@ export interface PreviewHandle {
 
 interface PreviewProps {
   src: string | null;
+  /** When no video is selected, enables upload in the empty state (same API as media bin). */
+  sessionId?: string | null;
   fps?: number;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
@@ -21,10 +26,110 @@ interface PreviewProps {
   onFpsDetected?: (fps: number) => void;
 }
 
+function PreviewEmpty({ sessionId }: { sessionId: string | null }) {
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const clear = () => setDragOver(false);
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, []);
+
+  const upload = useCallback(
+    async (files: FileList) => {
+      if (!sessionId || !files.length) return;
+      setUploading(true);
+      const fd = new FormData();
+      for (const f of Array.from(files)) fd.append("files", f);
+      fd.append("sessionId", sessionId);
+      try {
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        if (res.ok) window.dispatchEvent(new CustomEvent(OUTTAKE_UPLOAD_COMPLETE_EVENT));
+      } finally {
+        setUploading(false);
+      }
+    },
+    [sessionId]
+  );
+
+  return (
+    <div
+      className="relative w-full h-full flex flex-col items-center justify-center gap-3 px-4"
+      style={{ background: "#000" }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        upload(e.dataTransfer.files);
+      }}
+    >
+      <p className="text-xs text-center max-w-sm" style={{ color: "var(--text-tertiary)" }}>
+        Drag files here or click below — or use <strong style={{ color: "var(--text-secondary)" }}>+</strong> in the
+        media bin
+      </p>
+      {sessionId ? (
+        <>
+          <label
+            htmlFor="preview-empty-upload"
+            className="text-xs px-3 py-1.5 rounded border cursor-pointer"
+            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+          >
+            {uploading ? "Uploading…" : "Choose video / media"}
+          </label>
+          <input
+            id="preview-empty-upload"
+            type="file"
+            className="hidden"
+            accept="video/*,audio/*,image/*"
+            multiple
+            onChange={(e) => e.target.files && upload(e.target.files)}
+          />
+        </>
+      ) : (
+        <p className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>
+          Preparing workspace…
+        </p>
+      )}
+      {dragOver && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
+          style={{ background: "rgba(10,10,10,0.88)", border: "2px dashed var(--accent)" }}
+        >
+          <p className="text-xs" style={{ color: "var(--accent)" }}>
+            Drop to upload
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const Preview = forwardRef<PreviewHandle, PreviewProps>(
-  ({ src, fps = 25, onTimeUpdate, onDurationChange, onPlayStateChange, onFpsDetected }, ref) => {
+  (
+    {
+      src,
+      sessionId = null,
+      fps = 25,
+      onTimeUpdate,
+      onDurationChange,
+      onPlayStateChange,
+      onFpsDetected: _onFpsDetected,
+    },
+    ref
+  ) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    // Store callback in ref so event listeners always see latest
     const playStateRef = useRef(onPlayStateChange);
     playStateRef.current = onPlayStateChange;
 
@@ -33,8 +138,12 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
         if (videoRef.current) videoRef.current.currentTime = s;
       },
       getCurrentTime: () => videoRef.current?.currentTime ?? 0,
-      play: () => { videoRef.current?.play(); },
-      pause: () => { videoRef.current?.pause(); },
+      play: () => {
+        videoRef.current?.play();
+      },
+      pause: () => {
+        videoRef.current?.pause();
+      },
       toggle: () => {
         const v = videoRef.current;
         if (!v) return;
@@ -43,7 +152,6 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
       stepForward: () => {
         const v = videoRef.current;
         if (!v || !v.paused) return;
-        // Use exact frame duration for stepping
         v.currentTime = Math.min(v.duration, v.currentTime + 1 / fps);
       },
       stepBackward: () => {
@@ -63,7 +171,6 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
       onDurationChange?.(v.duration);
     }, [onDurationChange]);
 
-    // Play/pause events — use ref to avoid stale closures
     useEffect(() => {
       const v = videoRef.current;
       if (!v) return;
@@ -71,20 +178,15 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
       const onPause = () => playStateRef.current?.(false);
       v.addEventListener("play", onPlay);
       v.addEventListener("pause", onPause);
-      // Also fire initial state
       playStateRef.current?.(false);
       return () => {
         v.removeEventListener("play", onPlay);
         v.removeEventListener("pause", onPause);
       };
-    }, [src]); // Re-register when src changes (new video element content)
+    }, [src]);
 
     if (!src) {
-      return (
-        <div className="w-full h-full flex items-center justify-center" style={{ background: "#000" }}>
-          <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>Select a video from the media bin</p>
-        </div>
-      );
+      return <PreviewEmpty sessionId={sessionId} />;
     }
 
     return (
