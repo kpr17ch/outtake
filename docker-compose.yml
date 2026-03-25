@@ -20,11 +20,13 @@ services:
       - ./app/.env
     volumes:
       - ./:/app
+      - ${HOME}/.cursor:/host-cursor
     environment:
       - OUTTAKE_CWD=/app/workspace
       - AGENT_BACKEND=langgraph
       - ENGINE_PROXY_URL=http://engine-proxy:8200
       - FFMPEG_MCP_URL=http://ffmpeg-mcp:8100/mcp
+      - DEBUG_SESSION_LOG_PATH=/host-cursor/debug-b6e867.log
     depends_on:
       engine-proxy:
         condition: service_started

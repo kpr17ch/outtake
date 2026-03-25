@@ -298,9 +298,11 @@ export default function Home() {
             </button>
             {provider === "groq" ? (
               <p className="text-xs opacity-70 mt-2">
-                Groq: use a vision-capable model for images (e.g.{" "}
-                <code className="text-[11px]">meta-llama/llama-4-scout-17b-16e-instruct</code>
-                ). Text-only models ignore attached images.
+                Groq: not all models support tool calling. Recommended:{" "}
+                <code className="text-[11px]">llama-3.3-70b-versatile</code>,{" "}
+                <code className="text-[11px]">meta-llama/llama-4-scout-17b-16e-instruct</code>,{" "}
+                <code className="text-[11px]">llama-3.1-8b-instant</code>.
+                Models like kimi-k2 produce broken tool calls and will auto-fallback to llama-3.3-70b.
               </p>
             ) : null}
           </div>

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.services.agent_tools import run_skill_command_tool, skill_disclosure_tools
+from backend.services.debug_session_log import append_ndjson
 from backend.services.engine_proxy_client import EngineProxyClient
 from backend.services.engine_proxy_tools import tools_from_engine_list
 from backend.services.mcp_engine_tools import load_mcp_tools_routed_to_engine
@@ -76,7 +77,7 @@ def _workspace_and_skills_block(
         f"Project root: `{pr}`",
         "",
         "**MCP tools** use absolute paths under the workspace. **Skills** are listed in the Skills index below (`skills/<skill_id>/SKILL.md`). "
-        "Call **`load_skill`** with that `skill_id` for full instructions, then **`run_skill_command`** for shell steps (cwd=`project` or `workspace`).",
+        "Call **`load_skill`** with `skill_id` (folder name from the index, e.g. `video-gen`). The tool also accepts `seed_id` as a synonym. Then **`run_skill_command`** for shell steps (cwd=`project` or `workspace`).",
         "",
         f"- Input: `{ws}/input/`",
         f"- Output: `{ws}/output/`",
@@ -135,6 +136,30 @@ def _compose_system_prompt(
     return "\n\n".join(parts)
 
 
+GROQ_TOOL_CAPABLE_MODELS = {
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "compound-beta",
+    "compound-beta-mini",
+}
+GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile"
+
+
+def _groq_safe_model(model: str) -> str:
+    if model in GROQ_TOOL_CAPABLE_MODELS:
+        return model
+    for prefix in ("llama-3", "meta-llama/llama-4", "openai/gpt-oss", "compound"):
+        if model.startswith(prefix):
+            return model
+    return GROQ_FALLBACK_MODEL
+
+
 def _create_langgraph_agent(
     client: EngineProxyClient,
     session_id: str,
@@ -156,7 +181,8 @@ def _create_langgraph_agent(
     elif provider == "google":
         llm = ChatGoogleGenerativeAI(model=model, google_api_key=os.environ.get("GOOGLE_API_KEY"))
     elif provider == "groq":
-        llm = ChatGroq(model=model, api_key=os.environ.get("GROQ_API_KEY"))
+        safe = _groq_safe_model(model)
+        llm = ChatGroq(model=safe, api_key=os.environ.get("GROQ_API_KEY"))
     else:
         llm = ChatOpenAI(
             model=model,
@@ -261,7 +287,40 @@ def run_agent(
             messages = result.get("messages", []) if isinstance(result, dict) else []
             final = str(messages[-1].content) if messages else "No response from LangGraph agent."
         except Exception as exc:
-            final = f"LangGraph execution failed ({exc}). Falling back to deterministic engine tool routing."
+            # #region agent log
+            append_ndjson(
+                {
+                    "sessionId": "b6e867",
+                    "hypothesisId": "H3-openai-tool-use",
+                    "location": "agent_runner.py:langgraph",
+                    "message": "langgraph_invoke_failed",
+                    "data": {
+                        "exc_type": type(exc).__name__,
+                        "exc_str": str(exc)[:2000],
+                    },
+                }
+            )
+            # #endregion
+            is_tool_use_fail = "tool_use_failed" in str(exc) or "failed_generation" in str(exc)
+            provider = os.environ.get("AGENT_PROVIDER", "openai").lower()
+            cur_model = os.environ.get("AGENT_MODEL", "")
+            if is_tool_use_fail and provider == "groq" and cur_model != GROQ_FALLBACK_MODEL:
+                try:
+                    os.environ["AGENT_MODEL"] = GROQ_FALLBACK_MODEL
+                    agent = _create_langgraph_agent(client, sid, full_system, project_root, workspace_path)
+                    result = agent.invoke({"messages": [user_msg]})
+                    messages = result.get("messages", []) if isinstance(result, dict) else []
+                    final = str(messages[-1].content) if messages else "No response from LangGraph agent."
+                except Exception as retry_exc:
+                    final = (
+                        f"LangGraph execution failed with {cur_model} (tool_use_failed) and retry "
+                        f"with {GROQ_FALLBACK_MODEL} also failed ({retry_exc}). "
+                        "Falling back to deterministic engine tool routing."
+                    )
+                finally:
+                    os.environ["AGENT_MODEL"] = cur_model
+            else:
+                final = f"LangGraph execution failed ({exc}). Falling back to deterministic engine tool routing."
 
     if not final or final.startswith("LangGraph execution failed") or final.startswith(
         "Deep Agents execution failed"

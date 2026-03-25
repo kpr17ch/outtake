@@ -54,9 +54,11 @@ def skill_disclosure_tools(project_root: Path):
     by_id = {e.skill_id: e for e in discover_skills(project_root)}
 
     @tool("load_skill")
-    def load_skill(skill_id: str) -> str:
-        """Load full SKILL.md for a skill_id from the Skills index. Call before executing that skill's CLI or workflow."""
-        sid = skill_id.strip()
+    def load_skill(skill_id: str | None = None, seed_id: str | None = None) -> str:
+        """Load full SKILL.md for a skill from the Skills index. Pass skill_id (folder name, e.g. video-gen). seed_id is accepted as a synonym if the model uses that name."""
+        sid = (skill_id or seed_id or "").strip()
+        if not sid:
+            return "Error: pass skill_id (e.g. video-gen). Known skills are listed in the Skills index in the system prompt."
         entry = by_id.get(sid)
         if not entry:
             known = ", ".join(sorted(by_id.keys())) if by_id else "(none)"
