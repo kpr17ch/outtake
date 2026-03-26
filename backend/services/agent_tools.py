@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from backend.services.debug_session_log import append_ndjson
 from backend.services.skills_loader import discover_skills, load_skill_body, read_skills_file
 
 
@@ -15,13 +16,14 @@ def run_skill_command_tool(project_root: Path, workspace_path: Path):
 
     pr = str(project_root.resolve())
     ws = str(workspace_path.resolve())
+    cmd_timeout = int(os.environ.get("RUN_SKILL_COMMAND_TIMEOUT", "1800"))
 
     @tool("run_skill_command")
     def run_skill_command(command: str, cwd: str = "project") -> str:
         """Run one shell command line (chain with && if needed). cwd='project' = project root; cwd='workspace' = session workspace.
 
         Rules: `command` must be executable shell only — no markdown, no headings, no bullet lists, no code fences inside the string.
-        Use absolute paths for files. Examples: `node transcribe-pipeline.mjs --video foo.mp4 --jobId j1 --skipRender` then a second call: `npx remotion render src/index.ts OuttakeMotion /abs/workspace/output/out.mp4`
+        Use absolute paths for files. Examples: `node transcribe-pipeline.mjs --video foo.mp4 --jobId j1 --skipRender` (default transcription: use --skipRender unless user needs preview MP4) then a second call: `npx remotion render src/index.ts OuttakeMotion /abs/workspace/output/out.mp4`
         """
         if cwd not in ("project", "workspace"):
             return "Error: cwd must be 'project' or 'workspace'"
@@ -33,11 +35,11 @@ def run_skill_command_tool(project_root: Path, workspace_path: Path):
                 cwd=str(base),
                 capture_output=True,
                 text=True,
-                timeout=900,
+                timeout=cmd_timeout,
                 env=os.environ.copy(),
             )
         except subprocess.TimeoutExpired:
-            return "Error: skill command timed out after 900s"
+            return f"Error: skill command timed out after {cmd_timeout}s"
         except Exception as exc:
             return f"Error running command: {exc}"
         out = (proc.stdout or "") + ((proc.stderr or "") and "\n" + (proc.stderr or ""))
@@ -57,9 +59,39 @@ def skill_disclosure_tools(project_root: Path):
     def load_skill(skill_id: str | None = None, seed_id: str | None = None) -> str:
         """Load full SKILL.md for a skill from the Skills index. Pass skill_id (folder name, e.g. video-gen). seed_id is accepted as a synonym if the model uses that name."""
         sid = (skill_id or seed_id or "").strip()
+        # #region agent log
+        append_ndjson(
+            {
+                "sessionId": "0985cd",
+                "hypothesisId": "H1",
+                "location": "agent_tools.load_skill",
+                "message": "load_skill_invoked",
+                "data": {
+                    "skill_id_arg": skill_id,
+                    "seed_id_arg": seed_id,
+                    "sid": sid,
+                },
+            }
+        )
+        # #endregion
         if not sid:
             return "Error: pass skill_id (e.g. video-gen). Known skills are listed in the Skills index in the system prompt."
         entry = by_id.get(sid)
+        # #region agent log
+        append_ndjson(
+            {
+                "sessionId": "0985cd",
+                "hypothesisId": "H1",
+                "location": "agent_tools.load_skill",
+                "message": "load_skill_resolved",
+                "data": {
+                    "sid": sid,
+                    "found": entry is not None,
+                    "resolved_skill_id": entry.skill_id if entry else None,
+                },
+            }
+        )
+        # #endregion
         if not entry:
             known = ", ".join(sorted(by_id.keys())) if by_id else "(none)"
             return f"Unknown skill_id `{sid}`. Known: {known}"

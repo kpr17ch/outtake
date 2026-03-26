@@ -45,6 +45,21 @@ function writeJson(file, data) {
 	fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
+/** One-line JSON on stderr for agents; exit 2 = runtime failure */
+function failStructured(stage, err, extra = {}) {
+	const o = {
+		ok: false,
+		stage,
+		message: err && err.message ? err.message : String(err),
+		jobId: typeof globalThis.__tpJobId === "string" ? globalThis.__tpJobId : undefined,
+		...extra,
+	};
+	if (err && err.stderr) o.stderr = String(err.stderr).slice(0, 8000);
+	if (err && err.stdout) o.stdout = String(err.stdout).slice(0, 2000);
+	console.error(JSON.stringify(o));
+	process.exit(2);
+}
+
 const mode = getArg("mode") || "full";
 const videoArg = getArg("video");
 const providedJobId = getArg("jobId");
@@ -72,6 +87,7 @@ if (mode === "patch" && (!providedJobId || !patchPath)) {
 
 const videoName = mode === "full" ? path.basename(videoArg, path.extname(videoArg)) : "";
 const jobId = safeJobId(providedJobId || `${videoName}-${Date.now()}`);
+globalThis.__tpJobId = jobId;
 const jobPublicDir = path.join(publicDir, "jobs", jobId);
 const jobOutDir = path.join(outDir, "jobs", jobId);
 ensureDir(jobPublicDir);
@@ -107,13 +123,22 @@ console.log(`Job:  ${jobId}`);
 console.log(`Data: ${jobPublicDir}`);
 console.log(`Out:  ${previewPath}\n`);
 
-const ffprobeJson = runJson(
-	`npx remotion ffprobe -v error -show_streams -show_format -print_format json "${sourceVideoCopyPath}"`
-);
+let ffprobeJson;
+try {
+	ffprobeJson = runJson(
+		`npx remotion ffprobe -v error -show_streams -show_format -print_format json "${sourceVideoCopyPath}"`
+	);
+} catch (e) {
+	failStructured("ffprobe", e, {
+		hint: "Check video path and that npx remotion ffprobe works from project root.",
+		commandHint: "npx remotion ffprobe ...",
+	});
+}
 const videoStream = (ffprobeJson.streams || []).find((s) => s.codec_type === "video");
 if (!videoStream) {
-	console.error("No video stream detected.");
-	process.exit(1);
+	failStructured("ffprobe", new Error("No video stream detected."), {
+		hint: "File may be audio-only or corrupt.",
+	});
 }
 
 const width = Number(videoStream.width || 1920);
@@ -145,28 +170,46 @@ const MIN_GAP_MS = 50;
 
 if (mode === "full") {
 	console.log("[1/4] Extracting audio (MP3)...");
-	execSync(
-		`npx remotion ffmpeg -i "${sourceVideoCopyPath}" -vn -ar 16000 -ac 1 -b:a 64k -y "${audioPath}"`,
-		{stdio: "pipe"}
-	);
-
-	console.log("[2/4] Transcribing with ElevenLabs Scribe v2...");
-	const elevenlabs = new ElevenLabsClient();
-	const audioBuffer = fs.readFileSync(audioPath);
-	const audioBlob = new Blob([audioBuffer], {type: "audio/mpeg"});
-
-	const convertOptions = {
-		file: audioBlob,
-		modelId: "scribe_v2",
-		tagAudioEvents: false,
-		diarize: false,
-		timestampsGranularity: "word",
-	};
-	if (explicitLanguage) {
-		convertOptions.languageCode = explicitLanguage;
+	try {
+		execSync(
+			`npx remotion ffmpeg -i "${sourceVideoCopyPath}" -vn -ar 16000 -ac 1 -b:a 64k -y "${audioPath}"`,
+			{stdio: "pipe"}
+		);
+	} catch (e) {
+		failStructured("ffmpeg_extract", e, {
+			hint: "Audio extract failed. Verify ffmpeg via npx remotion ffmpeg.",
+		});
 	}
 
-	const transcription = await elevenlabs.speechToText.convert(convertOptions);
+	console.log("[2/4] Transcribing with ElevenLabs Scribe v2...");
+	if (!process.env.ELEVENLABS_API_KEY || !String(process.env.ELEVENLABS_API_KEY).trim()) {
+		failStructured("elevenlabs_auth", new Error("ELEVENLABS_API_KEY is missing or empty."), {
+			hint: "Set in project .env or app/.env for Docker backend.",
+		});
+	}
+	let transcription;
+	try {
+		const elevenlabs = new ElevenLabsClient();
+		const audioBuffer = fs.readFileSync(audioPath);
+		const audioBlob = new Blob([audioBuffer], {type: "audio/mpeg"});
+
+		const convertOptions = {
+			file: audioBlob,
+			modelId: "scribe_v2",
+			tagAudioEvents: false,
+			diarize: false,
+			timestampsGranularity: "word",
+		};
+		if (explicitLanguage) {
+			convertOptions.languageCode = explicitLanguage;
+		}
+
+		transcription = await elevenlabs.speechToText.convert(convertOptions);
+	} catch (e) {
+		failStructured("elevenlabs_stt", e, {
+			hint: "STT request failed (network, quota, or file too large).",
+		});
+	}
 	detectedLanguage = transcription.languageCode || explicitLanguage || "unknown";
 
 	const elWords = (transcription.words || []).filter((w) => w.type === "word");
@@ -270,22 +313,30 @@ if (mode === "full") {
 
 writeJson(alignedPath, aligned);
 
-console.log(`[${mode === "full" ? "4/4" : "3/3"}] Rendering preview in Remotion...`);
-if (!skipRender) {
-	const props = {
-		jobId,
-		videoSrc: `jobs/${jobId}/source.mp4`,
-		captionsSrc: `jobs/${jobId}/aligned.json`,
-		durationInFrames: renderDurationInFrames,
-		fps,
-		width,
-		height,
-	};
-	const escapedProps = JSON.stringify(props).replace(/"/g, '\\"');
-	execSync(
-		`npx remotion render src/index.ts SubtitleJobPreview "${previewPath}" --props "${escapedProps}" --concurrency=4`,
-		{stdio: "pipe"}
-	);
+if (skipRender) {
+	console.log(`[${mode === "full" ? "4/4" : "3/3"}] Skipping Remotion preview (--skipRender).`);
+} else {
+	console.log(`[${mode === "full" ? "4/4" : "3/3"}] Rendering preview in Remotion...`);
+	try {
+		const props = {
+			jobId,
+			videoSrc: `jobs/${jobId}/source.mp4`,
+			captionsSrc: `jobs/${jobId}/aligned.json`,
+			durationInFrames: renderDurationInFrames,
+			fps,
+			width,
+			height,
+		};
+		const escapedProps = JSON.stringify(props).replace(/"/g, '\\"');
+		execSync(
+			`npx remotion render src/index.ts SubtitleJobPreview "${previewPath}" --props "${escapedProps}" --concurrency=4`,
+			{stdio: "pipe"}
+		);
+	} catch (e) {
+		failStructured("remotion_render", e, {
+			hint: "Remotion render failed. Try --skipRender for transcription-only.",
+		});
+	}
 }
 
 const result = {

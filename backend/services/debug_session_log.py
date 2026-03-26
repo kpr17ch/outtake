@@ -20,6 +20,10 @@ def append_ndjson(payload: dict) -> None:
         [
             "/app/.cursor/debug-b6e867.log",
             "/home/danielt/.cursor/debug-b6e867.log",
+            # Session 0985cd (debug mode): repo + Docker host-cursor mount
+            "/app/.cursor/debug-0985cd.log",
+            "/host-cursor/debug-0985cd.log",
+            "/Users/Uni/Desktop/Coding/.cursor/debug-0985cd.log",
         ]
     )
     for p in paths:

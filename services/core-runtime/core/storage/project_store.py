@@ -13,7 +13,10 @@ from core.history.log import OperationLogEntry
 class ProjectStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
-        self._conn = sqlite3.connect(str(db_path))
+        # Engine-proxy executes tool calls in worker threads.
+        # The same ProjectStore instance is shared per session and guarded by a session lock,
+        # so cross-thread access is serialized but must be allowed by sqlite.
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.execute("pragma journal_mode=wal")
         self._conn.execute("pragma foreign_keys=on")
         self._init_tables()

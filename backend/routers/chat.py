@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -7,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.services.agent_runner import run_agent
 from backend.services.context import resolve_workspace_context
+from backend.services.debug_session_log import append_ndjson
 from backend.services.protocol_adapter import assistant_tool_use, sse_data, user_tool_result
 from backend.services.settings_store import load_settings
 from backend.services.sessions import update_session
@@ -43,31 +47,67 @@ async def post_chat(payload: dict):
     if workspace.session_id:
         settings = load_settings(workspace.session_id)
         import os
-        if settings.provider:
-            os.environ["AGENT_PROVIDER"] = settings.provider
+
+        prov = (settings.provider or "").strip().lower() or "openai"
+        os.environ["AGENT_PROVIDER"] = prov
         if settings.model:
             os.environ["AGENT_MODEL"] = settings.model
-        if settings.apiKey:
-            if settings.provider == "anthropic":
-                os.environ["ANTHROPIC_API_KEY"] = settings.apiKey
-            elif settings.provider == "google":
-                os.environ["GOOGLE_API_KEY"] = settings.apiKey
-            elif settings.provider == "groq":
-                os.environ["GROQ_API_KEY"] = settings.apiKey
+        if settings.apiKey and str(settings.apiKey).strip():
+            key = str(settings.apiKey).strip()
+            if prov == "anthropic":
+                os.environ["ANTHROPIC_API_KEY"] = key
+            elif prov == "google":
+                os.environ["GOOGLE_API_KEY"] = key
+            elif prov == "groq":
+                os.environ["GROQ_API_KEY"] = key
             else:
-                os.environ["OPENAI_API_KEY"] = settings.apiKey
+                os.environ["OPENAI_API_KEY"] = key
 
     async def event_stream():
         try:
-            result = run_agent(
-                message=message.strip(),
-                project_root=project_root,
-                workspace_path=workspace.workspace_path,
-                session_id=workspace.agent_session_id or workspace.session_id,
-                system_prompt=system_prompt,
-                editor_context=editor_context if isinstance(editor_context, dict) else None,
-                image_inputs=image_inputs if isinstance(image_inputs, list) else None,
+            started_ms = int(time.time() * 1000)
+            invoke_timeout_s = int(os.environ.get("AGENT_INVOKE_TIMEOUT_SECONDS", "240"))
+            # #region agent log
+            append_ndjson(
+                {
+                    "sessionId": "0985cd",
+                    "hypothesisId": "H7-chat-blocking-timeout",
+                    "location": "routers.chat:event_stream",
+                    "message": "chat_run_agent_start",
+                    "data": {
+                        "timeout_s": invoke_timeout_s,
+                        "session_id": workspace.session_id,
+                    },
+                }
             )
+            # #endregion
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    run_agent,
+                    message=message.strip(),
+                    project_root=project_root,
+                    workspace_path=workspace.workspace_path,
+                    session_id=workspace.agent_session_id or workspace.session_id,
+                    system_prompt=system_prompt,
+                    editor_context=editor_context if isinstance(editor_context, dict) else None,
+                    image_inputs=image_inputs if isinstance(image_inputs, list) else None,
+                ),
+                timeout=invoke_timeout_s,
+            )
+            # #region agent log
+            append_ndjson(
+                {
+                    "sessionId": "0985cd",
+                    "hypothesisId": "H7-chat-blocking-timeout",
+                    "location": "routers.chat:event_stream",
+                    "message": "chat_run_agent_done",
+                    "data": {
+                        "elapsed_ms": int(time.time() * 1000) - started_ms,
+                        "tool_events": len(result.tool_events),
+                    },
+                }
+            )
+            # #endregion
             if workspace.session_id:
                 update_session(workspace.session_id, {"agentSessionId": result.session_id})
             yield sse_data({"type": "system", "subtype": "init", "session_id": result.session_id})
@@ -75,6 +115,30 @@ async def post_chat(payload: dict):
                 yield sse_data(assistant_tool_use(tool_event.call_id, tool_event.name, tool_event.tool_input))
                 yield sse_data(user_tool_result(tool_event.call_id, tool_event.result))
             yield sse_data({"type": "result", "result": result.final_text})
+        except asyncio.TimeoutError:
+            # #region agent log
+            append_ndjson(
+                {
+                    "sessionId": "0985cd",
+                    "hypothesisId": "H7-chat-blocking-timeout",
+                    "location": "routers.chat:event_stream",
+                    "message": "chat_run_agent_timeout",
+                    "data": {"timeout_s": int(os.environ.get("AGENT_INVOKE_TIMEOUT_SECONDS", "240"))},
+                }
+            )
+            # #endregion
+            yield sse_data(
+                {
+                    "type": "error",
+                    "message": "Agent execution timed out. Try a shorter prompt or retry; fallback can still run deterministic operations.",
+                }
+            )
+            yield sse_data(
+                {
+                    "type": "result",
+                    "result": "Error: Agent execution timed out before completion.",
+                }
+            )
         except Exception as exc:
             yield sse_data({"type": "error", "message": str(exc)})
             yield sse_data({"type": "result", "result": f"Error: {exc}"})

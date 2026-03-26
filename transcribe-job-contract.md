@@ -14,7 +14,7 @@ Defines the stable input/output contract between your web app and `transcribe-pi
 ### Full generation mode
 
 ```bash
-node subtitle-pipeline.mjs --video VIDEO.mp4 [--jobId JOB_ID] [--fps 30] [--lang eng]
+node transcribe-pipeline.mjs --video VIDEO.mp4 [--jobId JOB_ID] [--fps 30] [--lang eng]
 ```
 
 - `--video` (required): filename in `public/` or absolute path
@@ -25,7 +25,7 @@ node subtitle-pipeline.mjs --video VIDEO.mp4 [--jobId JOB_ID] [--fps 30] [--lang
 ### Feedback patch mode
 
 ```bash
-node subtitle-pipeline.mjs --mode patch --jobId JOB_ID --patch PATCH.json
+node transcribe-pipeline.mjs --mode patch --jobId JOB_ID --patch PATCH.json
 ```
 
 - Loads existing `public/jobs/{jobId}/aligned.json`
@@ -116,7 +116,7 @@ For each job id:
 ## Web App Integration
 
 1. Set `ELEVENLABS_API_KEY` in the server environment.
-2. Call `subtitle-pipeline.mjs` from your API route (or agent) as a child process.
+2. Call `transcribe-pipeline.mjs` from your API route (or agent) as a child process.
 3. Poll by `jobId` — read `result.json` for completion status.
 4. Show `preview.mp4` in UI for user feedback.
 5. If timing is off, send a patch JSON to patch mode.
