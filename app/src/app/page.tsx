@@ -8,8 +8,16 @@ import ChatPanel from "@/components/ChatPanel";
 import { useChat, type EditorContext } from "@/lib/useChat";
 import type { Session } from "@/lib/types";
 import type { MediaItem } from "@/components/MediaBin";
+import { createDefaultSequence, nextTrackLabel, sequenceToTimelineTracks, type Sequence } from "@/lib/sequence";
 
 const MediaBin = dynamic(() => import("@/components/MediaBin"), { ssr: false });
+
+function inferMediaKindFromPath(path: string): "video" | "audio" | null {
+  const ext = path.split(".").pop()?.toLowerCase() || "";
+  if (["mp4", "mov", "webm", "mkv", "avi"].includes(ext)) return "video";
+  if (["mp3", "wav", "aac", "ogg", "flac", "m4a"].includes(ext)) return "audio";
+  return null;
+}
 
 export default function Home() {
   // ─── Session ───
@@ -84,6 +92,7 @@ export default function Home() {
   // ─── Media ───
   const [activeMedia, setActiveMedia] = useState<MediaItem | null>(null);
   const [allMediaFiles, setAllMediaFiles] = useState<{ name: string; path: string }[]>([]);
+  const [sequence, setSequence] = useState<Sequence>(() => createDefaultSequence(25));
   const previewRef = useRef<PreviewHandle>(null);
 
   // ─── Playback ───
@@ -94,6 +103,7 @@ export default function Home() {
 
   // ─── Markers ───
   const [markers, setMarkers] = useState<Marker>({ inTime: null, outTime: null });
+  const timelineDuration = Math.max(duration || 0, sequence.duration || 0);
 
   const handleSeek = useCallback((t: number) => {
     previewRef.current?.seekTo(t);
@@ -120,34 +130,35 @@ export default function Home() {
     setIsPlaying(false);
   }, [activeMedia]);
 
-  // ─── Build timeline tracks from active media ───
-  const tracks: TimelineTrack[] = useMemo(() => {
-    if (!activeMedia || activeMedia.kind !== "video" || duration <= 0) return [];
-    return [
-      {
-        id: "v1",
-        type: "video",
-        label: "V1",
-        clips: [{
-          id: `clip-${activeMedia.path}`,
-          name: activeMedia.name,
-          sourceIn: 0,
-          sourceOut: duration,
-        }],
-      },
-      {
-        id: "a1",
-        type: "audio",
-        label: "A1",
-        clips: [{
-          id: `audio-${activeMedia.path}`,
-          name: "Audio",
-          sourceIn: 0,
-          sourceOut: duration,
-        }],
-      },
-    ];
-  }, [activeMedia, duration]);
+  const tracks: TimelineTrack[] = useMemo(() => sequenceToTimelineTracks(sequence), [sequence]);
+
+  const upsertClipForActiveMedia = useCallback((media: MediaItem, clipDuration: number) => {
+    const targetType = media.kind === "audio" ? "audio" : "video";
+    setSequence((prev) => {
+      const has = prev.tracks.some((t) => t.clips.some((c) => c.assetPath === media.path));
+      if (has) return prev;
+      const idx = prev.tracks.findIndex((t) => t.type === targetType);
+      if (idx < 0) return prev;
+      const tracksCopy = [...prev.tracks];
+      const target = tracksCopy[idx];
+      tracksCopy[idx] = {
+        ...target,
+        clips: [
+          ...target.clips,
+          {
+            id: crypto.randomUUID(),
+            name: media.name,
+            assetPath: media.path,
+            sourceIn: 0,
+            sourceOut: Math.max(clipDuration, 0.1),
+            timelineIn: 0,
+            timelineOut: Math.max(clipDuration, 0.1),
+          },
+        ],
+      };
+      return { ...prev, tracks: tracksCopy, duration: Math.max(prev.duration, clipDuration), updatedAt: new Date().toISOString() };
+    });
+  }, []);
 
   // ─── Auto-load new agent output ───
   const handleNewOutput = useCallback((item: MediaItem) => {
@@ -185,7 +196,7 @@ export default function Home() {
         case "ArrowRight":
           e.preventDefault();
           if (e.shiftKey) {
-            handleSeek(Math.min(duration, currentTime + 1));
+            handleSeek(Math.min(timelineDuration, currentTime + 1));
           } else {
             previewRef.current?.stepForward();
           }
@@ -199,6 +210,135 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handler);
   }, [currentTime, duration, handleSeek, handleSetIn, handleSetOut, handleClearMarkers]);
 
+  useEffect(() => {
+    if (!sessionId) return;
+    try {
+      const raw = localStorage.getItem(`outtake-sequence-${sessionId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Sequence;
+        if (Array.isArray(parsed.tracks)) setSequence(parsed);
+      }
+    } catch {
+      // ignore
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    try {
+      localStorage.setItem(`outtake-sequence-${sessionId}`, JSON.stringify(sequence));
+    } catch {
+      // ignore
+    }
+  }, [sessionId, sequence]);
+
+  const addTrack = useCallback((type: "video" | "audio") => {
+    setSequence((prev) => ({
+      ...prev,
+      tracks: [
+        ...prev.tracks,
+        {
+          id: crypto.randomUUID(),
+          type,
+          label: nextTrackLabel(type, prev.tracks),
+          muted: false,
+          solo: false,
+          locked: false,
+          clips: [],
+        },
+      ],
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const deleteTrack = useCallback((trackId: string) => {
+    setSequence((prev) => {
+      const nextTracks = prev.tracks.filter((t) => t.id !== trackId);
+      if (!nextTracks.length) return prev;
+      return { ...prev, tracks: nextTracks, updatedAt: new Date().toISOString() };
+    });
+  }, []);
+
+  const toggleTrackMute = useCallback((trackId: string) => {
+    setSequence((prev) => ({
+      ...prev,
+      tracks: prev.tracks.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t)),
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const toggleTrackSolo = useCallback((trackId: string) => {
+    setSequence((prev) => ({
+      ...prev,
+      tracks: prev.tracks.map((t) => (t.id === trackId ? { ...t, solo: !t.solo } : t)),
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const handleDeleteFile = useCallback(async (item: MediaItem) => {
+    if (!sessionId) return;
+    const res = await fetch(`/api/workspace/files/${item.path}?sessionId=${sessionId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    if (activeMedia?.path === item.path) setActiveMedia(null);
+    setSequence((prev) => ({
+      ...prev,
+      tracks: prev.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => (c.assetPath === item.path ? { ...c, missing: true } : c)),
+      })),
+      updatedAt: new Date().toISOString(),
+    }));
+  }, [sessionId, activeMedia]);
+
+  const addClipAtTime = useCallback(
+    (trackId: string, media: { path: string; name: string; kind: "video" | "audio" }, atTime: number) => {
+      const clipLen = 5;
+      setSequence((prev) => {
+        const idx = prev.tracks.findIndex((t) => t.id === trackId);
+        if (idx < 0) return prev;
+        const target = prev.tracks[idx];
+        if (target.type !== media.kind) return prev;
+
+        let start = Math.max(0, atTime);
+        let safety = 0;
+        while (safety < 50) {
+          const end = start + clipLen;
+          const overlap = target.clips.find(
+            (c) => !c.missing && c.timelineIn < end && c.timelineOut > start
+          );
+          if (!overlap) break;
+          start = overlap.timelineOut;
+          safety++;
+        }
+        const end = start + clipLen;
+        const clip = {
+          id: crypto.randomUUID(),
+          name: media.name,
+          assetPath: media.path,
+          sourceIn: start,
+          sourceOut: end,
+          timelineIn: start,
+          timelineOut: end,
+        };
+
+        const tracksCopy = [...prev.tracks];
+        tracksCopy[idx] = { ...target, clips: [...target.clips, clip] };
+        return { ...prev, tracks: tracksCopy, duration: Math.max(prev.duration, end), updatedAt: new Date().toISOString() };
+      });
+    },
+    []
+  );
+
+  const availableMediaOptions = useMemo(() => {
+    return allMediaFiles
+      .map((f) => {
+        const kind = inferMediaKindFromPath(f.path);
+        if (!kind) return null;
+        return { path: f.path, name: f.name, kind };
+      })
+      .filter(Boolean) as Array<{ path: string; name: string; kind: "video" | "audio" }>;
+  }, [allMediaFiles]);
+
   // ─── Sync editor context for agent ───
   useEffect(() => {
     const sel = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
@@ -209,10 +349,24 @@ export default function Home() {
       activeVideo: activeMedia?.kind === "video" ? activeMedia.name : undefined,
       activeVideoPath: activeMedia?.kind === "video" ? activeMedia.path : undefined,
       selection: sel,
-      duration: duration || undefined,
+      duration: timelineDuration || undefined,
       fps: fps || undefined,
+      tracks: sequence.tracks.map((t) => ({
+        id: t.id,
+        type: t.type,
+        label: t.label,
+        muted: t.muted,
+        clips: t.clips.map((c) => ({
+          id: c.id,
+          name: c.name,
+          assetPath: c.assetPath,
+          timelineIn: c.timelineIn,
+          timelineOut: c.timelineOut,
+        })),
+      })),
+      playhead: currentTime,
     }));
-  }, [activeMedia, markers, duration, fps]);
+  }, [activeMedia, markers, duration, fps, sequence, currentTime]);
 
   // ─── Chat with selection context ───
   const selectionForChat = markers.inTime !== null && markers.outTime !== null && markers.inTime < markers.outTime
@@ -223,13 +377,8 @@ export default function Home() {
   useEffect(() => { isFirstMsg.current = true; }, [sessionId]);
 
   const handleSend = useCallback((input: string, referencedFiles?: string[]) => {
-    // Update editor context with referenced files before sending
-    if (referencedFiles?.length) {
-      setEditorCtx((prev) => ({ ...prev, referencedFiles }));
-    } else {
-      setEditorCtx((prev) => ({ ...prev, referencedFiles: undefined }));
-    }
-    send(input);
+    const override = referencedFiles?.length ? { referencedFiles } : undefined;
+    void send(input, override);
 
     if (isFirstMsg.current && sessionId) {
       isFirstMsg.current = false;
@@ -240,7 +389,7 @@ export default function Home() {
         body: JSON.stringify({ title }),
       }).catch(() => {});
     }
-  }, [send, selectionForChat, activeMedia, sessionId]);
+  }, [send, sessionId]);
 
   return (
     <div
@@ -314,19 +463,27 @@ export default function Home() {
               <MediaBin
                 sessionId={sessionId}
                 activeItem={activeMedia}
-                onSelect={setActiveMedia}
+                onSelect={(m) => {
+                  setActiveMedia(m);
+                  if (duration > 0) upsertClipForActiveMedia(m, duration);
+                }}
                 onNewOutput={handleNewOutput}
                 onItemsChange={setAllMediaFiles}
+                onDeleteFile={handleDeleteFile}
               />
             </div>
             <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
               <Preview
                 ref={previewRef}
                 sessionId={sessionId}
-                src={activeMedia?.kind === "video" ? activeMedia.url : null}
+                src={activeMedia ? activeMedia.url : null}
+                mediaKind={activeMedia?.kind ?? null}
                 fps={fps}
                 onTimeUpdate={setCurrentTime}
-                onDurationChange={setDuration}
+                onDurationChange={(d) => {
+                  setDuration(d);
+                  if (activeMedia) upsertClipForActiveMedia(activeMedia, d);
+                }}
                 onPlayStateChange={setIsPlaying}
                 onFpsDetected={setFps}
               />
@@ -334,7 +491,7 @@ export default function Home() {
           </div>
 
           <Timeline
-            duration={duration}
+            duration={timelineDuration}
             currentTime={currentTime}
             fps={fps}
             isPlaying={isPlaying}
@@ -345,6 +502,12 @@ export default function Home() {
             onSetIn={handleSetIn}
             onSetOut={handleSetOut}
             onClearMarkers={handleClearMarkers}
+            onAddTrack={addTrack}
+            onDeleteTrack={deleteTrack}
+            onToggleTrackMute={toggleTrackMute}
+            onToggleTrackSolo={toggleTrackSolo}
+            availableMedia={availableMediaOptions}
+            onAddClipAtTime={addClipAtTime}
           />
 
           <div

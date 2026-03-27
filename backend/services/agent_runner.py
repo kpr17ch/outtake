@@ -108,6 +108,39 @@ def _workspace_and_skills_block(
             lines.append(
                 f"Selection: {float(sel['inSeconds']):.2f}s → {float(sel['outSeconds']):.2f}s"
             )
+        tr = editor_context.get("tracks")
+        if isinstance(tr, list) and tr:
+            lines.append("Tracks:")
+            for t in tr[:12]:
+                if not isinstance(t, dict):
+                    continue
+                tid = str(t.get("id") or "")
+                tlabel = str(t.get("label") or tid)
+                ttype = str(t.get("type") or "unknown")
+                muted = bool(t.get("muted"))
+                clips = t.get("clips") if isinstance(t.get("clips"), list) else []
+                lines.append(f"- {tlabel} ({ttype}, muted={str(muted).lower()}) clips={len(clips)}")
+                for c in clips[:8]:
+                    if not isinstance(c, dict):
+                        continue
+                    cname = str(c.get("name") or c.get("id") or "clip")
+                    apath = str(c.get("assetPath") or "")
+                    tin = float(c.get("timelineIn") or 0)
+                    tout = float(c.get("timelineOut") or 0)
+                    lines.append(f"  - {cname}: {tin:.2f}-{tout:.2f}s path={apath}")
+
+        refs = editor_context.get("referencedFiles")
+        if isinstance(refs, list) and refs:
+            lines.append("## Referenced Files")
+            lines.append(
+                "The user explicitly referenced these files via @ in their message. Use these exact absolute paths."
+            )
+            for f in refs[:50]:
+                if not isinstance(f, str):
+                    continue
+                full = f if f.startswith("/") else f"{ws}/{f}"
+                lines.append(f"- `{full}`")
+            lines.append("")
         lines.append("")
     return "\n".join(lines)
 

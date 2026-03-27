@@ -17,6 +17,7 @@ export interface PreviewHandle {
 
 interface PreviewProps {
   src: string | null;
+  mediaKind?: "video" | "audio" | "image" | "other" | null;
   /** When no video is selected, enables upload in the empty state (same API as media bin). */
   sessionId?: string | null;
   fps?: number;
@@ -120,6 +121,7 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
   (
     {
       src,
+      mediaKind = "video",
       sessionId = null,
       fps = 25,
       onTimeUpdate,
@@ -130,32 +132,40 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
     ref
   ) => {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const audioRef = useRef<HTMLAudioElement>(null);
     const playStateRef = useRef(onPlayStateChange);
-    playStateRef.current = onPlayStateChange;
+    useEffect(() => {
+      playStateRef.current = onPlayStateChange;
+    }, [onPlayStateChange]);
 
     useImperativeHandle(ref, () => ({
       seekTo: (s: number) => {
-        if (videoRef.current) videoRef.current.currentTime = s;
+        const m = videoRef.current ?? audioRef.current;
+        if (m) m.currentTime = s;
       },
-      getCurrentTime: () => videoRef.current?.currentTime ?? 0,
+      getCurrentTime: () => (videoRef.current ?? audioRef.current)?.currentTime ?? 0,
       play: () => {
-        videoRef.current?.play();
+        void (videoRef.current ?? audioRef.current)?.play();
       },
       pause: () => {
-        videoRef.current?.pause();
+        (videoRef.current ?? audioRef.current)?.pause();
       },
       toggle: () => {
-        const v = videoRef.current;
+        const v = videoRef.current ?? audioRef.current;
         if (!v) return;
-        v.paused ? v.play() : v.pause();
+        if (v.paused) {
+          void v.play();
+        } else {
+          v.pause();
+        }
       },
       stepForward: () => {
-        const v = videoRef.current;
+        const v = videoRef.current ?? audioRef.current;
         if (!v || !v.paused) return;
         v.currentTime = Math.min(v.duration, v.currentTime + 1 / fps);
       },
       stepBackward: () => {
-        const v = videoRef.current;
+        const v = videoRef.current ?? audioRef.current;
         if (!v || !v.paused) return;
         v.currentTime = Math.max(0, v.currentTime - 1 / fps);
       },
@@ -166,13 +176,13 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
     }, [onTimeUpdate]);
 
     const handleLoadedMetadata = useCallback(() => {
-      const v = videoRef.current;
+      const v = videoRef.current ?? audioRef.current;
       if (!v) return;
       onDurationChange?.(v.duration);
     }, [onDurationChange]);
 
     useEffect(() => {
-      const v = videoRef.current;
+      const v = videoRef.current ?? audioRef.current;
       if (!v) return;
       const onPlay = () => playStateRef.current?.(true);
       const onPause = () => playStateRef.current?.(false);
@@ -195,18 +205,35 @@ const Preview = forwardRef<PreviewHandle, PreviewProps>(
         style={{ background: "#000" }}
         onClick={() => {
           const v = videoRef.current;
-          if (v) v.paused ? v.play() : v.pause();
+          if (!v) return;
+          if (v.paused) {
+            void v.play();
+          } else {
+            v.pause();
+          }
         }}
       >
-        <video
-          ref={videoRef}
-          src={src}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          className="max-w-full max-h-full pointer-events-none"
-          style={{ objectFit: "contain" }}
-          preload="auto"
-        />
+        {mediaKind === "audio" ? (
+          <audio
+            ref={audioRef}
+            src={src}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            controls
+            preload="auto"
+            className="w-[80%]"
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            src={src}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            className="max-w-full max-h-full pointer-events-none"
+            style={{ objectFit: "contain" }}
+            preload="auto"
+          />
+        )}
       </div>
     );
   }

@@ -10,6 +10,22 @@ export interface EditorContext {
   duration?: number;
   fps?: number;
   referencedFiles?: string[];
+  tracks?: Array<{
+    id: string;
+    type: "video" | "audio";
+    label: string;
+    muted: boolean;
+    clips: Array<{
+      id: string;
+      name: string;
+      assetPath: string;
+      timelineIn: number;
+      timelineOut: number;
+    }>;
+  }>;
+  activeTrackId?: string;
+  selectedClipIds?: string[];
+  playhead?: number;
 }
 
 interface UseChatOptions {
@@ -113,7 +129,7 @@ export function useChat({ activeSessionId, onAgentSessionId, editorContext }: Us
   );
 
   const send = useCallback(
-    async (input: string) => {
+    async (input: string, editorContextOverride?: Partial<EditorContext>) => {
       if (!input.trim() || isStreaming) return;
 
       const ts = new Date().toLocaleTimeString("de-DE", {
@@ -143,8 +159,15 @@ export function useChat({ activeSessionId, onAgentSessionId, editorContext }: Us
       abortRef.current = new AbortController();
 
       try {
+        const mergedEditorContext: EditorContext = {
+          ...(editorContext || {}),
+          ...(editorContextOverride || {}),
+        };
+
+        const effectiveReferencedFiles = mergedEditorContext.referencedFiles;
+
         const imageInputs =
-          editorContext?.referencedFiles
+          effectiveReferencedFiles
             ?.filter((f) => /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(f))
             .map((f) => ({ url: `/api/workspace/files/${f}?sessionId=${activeSessionId || ""}` })) || [];
 
@@ -154,7 +177,7 @@ export function useChat({ activeSessionId, onAgentSessionId, editorContext }: Us
           body: JSON.stringify({
             message: input.trim(),
             sessionId: activeSessionId,
-            editorContext,
+            editorContext: mergedEditorContext,
             imageInputs,
           }),
           signal: abortRef.current.signal,
@@ -209,7 +232,7 @@ export function useChat({ activeSessionId, onAgentSessionId, editorContext }: Us
         );
       }
     },
-    [activeSessionId, handleEvent, isStreaming]
+    [activeSessionId, handleEvent, isStreaming, editorContext]
   );
 
   const stop = useCallback(() => {

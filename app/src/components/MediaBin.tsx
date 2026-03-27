@@ -18,6 +18,7 @@ interface MediaBinProps {
   onSelect: (item: MediaItem) => void;
   onNewOutput?: (item: MediaItem) => void;
   onItemsChange?: (items: { name: string; path: string }[]) => void;
+  onDeleteFile?: (item: MediaItem) => Promise<void> | void;
 }
 
 function classifyFile(name: string): MediaItem["kind"] {
@@ -34,7 +35,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput, onItemsChange }: MediaBinProps) {
+export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput, onItemsChange, onDeleteFile }: MediaBinProps) {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -89,7 +90,7 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
       }
       prevOutputPaths.current = currentOutputPaths;
     } catch { /* ignore */ }
-  }, [sessionId, onNewOutput]);
+  }, [sessionId, onNewOutput, onItemsChange]);
 
   useEffect(() => {
     fetchItems();
@@ -168,7 +169,7 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
               <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-tertiary)" }}>Source</span>
             </div>
             {sources.map((item) => (
-              <FileRow key={item.path} item={item} active={item.path === activeItem?.path} onSelect={onSelect} />
+              <FileRow key={item.path} item={item} active={item.path === activeItem?.path} onSelect={onSelect} onDelete={onDeleteFile} />
             ))}
           </>
         )}
@@ -180,7 +181,7 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
               <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--success)" }}>Results</span>
             </div>
             {results.map((item) => (
-              <FileRow key={item.path} item={item} active={item.path === activeItem?.path} onSelect={onSelect} />
+              <FileRow key={item.path} item={item} active={item.path === activeItem?.path} onSelect={onSelect} onDelete={onDeleteFile} />
             ))}
           </>
         )}
@@ -189,12 +190,37 @@ export default function MediaBin({ sessionId, activeItem, onSelect, onNewOutput,
   );
 }
 
-function FileRow({ item, active, onSelect }: { item: MediaItem; active: boolean; onSelect: (i: MediaItem) => void }) {
+function FileRow({
+  item,
+  active,
+  onSelect,
+  onDelete,
+}: {
+  item: MediaItem;
+  active: boolean;
+  onSelect: (i: MediaItem) => void;
+  onDelete?: (i: MediaItem) => Promise<void> | void;
+}) {
   const icon = item.kind === "video" ? "🎬" : item.kind === "audio" ? "🎵" : "🖼";
+
+  const handleDragStart = (e: React.DragEvent<HTMLButtonElement>) => {
+    try {
+      e.dataTransfer.setData(
+        "application/x-outtake-media",
+        JSON.stringify({ path: item.path, name: item.name, kind: item.kind })
+      );
+      e.dataTransfer.effectAllowed = "copy";
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <button
       type="button"
       onClick={() => onSelect(item)}
+      draggable
+      onDragStart={handleDragStart}
       className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left cursor-pointer transition-colors mb-0.5"
       style={{
         background: active ? "var(--bg-elevated)" : "transparent",
@@ -204,6 +230,18 @@ function FileRow({ item, active, onSelect }: { item: MediaItem; active: boolean;
       <span className="text-xs shrink-0">{icon}</span>
       <span className="text-xs truncate flex-1">{item.name}</span>
       <span className="text-[10px] shrink-0" style={{ color: "var(--text-tertiary)" }}>{formatSize(item.size)}</span>
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (confirm(`Delete ${item.name}?`)) void onDelete?.(item);
+        }}
+        className="text-[10px] px-1"
+        style={{ color: "var(--text-tertiary)" }}
+      >
+        x
+      </span>
     </button>
   );
 }

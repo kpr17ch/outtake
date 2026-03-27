@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.services.context import resolve_workspace_context
+from backend.services.ingest import ingest_normalize
 from backend.services.workspace import resolve_workspace_entry_path, sanitize_uploaded_filename
 
 router = APIRouter()
@@ -41,6 +43,11 @@ async def upload_files(
         target = Path(input_dir) / safe_name
         content = await file.read()
         target.write_bytes(content)
+        threading.Thread(
+            target=ingest_normalize,
+            args=(target, workspace.workspace_path),
+            daemon=True,
+        ).start()
         results.append(
             {
                 "filename": safe_name,

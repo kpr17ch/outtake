@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import chat, engine, files, sessions, settings, upload, workspace
+from backend.routers import chat, engine, files, render, sessions, settings, upload, workspace
 
 
 app = FastAPI(title="Outtake Backend", version="0.1.0")
@@ -20,6 +20,7 @@ app.include_router(workspace.router)
 app.include_router(files.router)
 app.include_router(settings.router)
 app.include_router(engine.router)
+app.include_router(render.router)
 
 
 @app.get("/health")

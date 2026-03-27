@@ -194,6 +194,32 @@ def workspace_file(file_path: str, request: Request, sessionId: str | None = Que
     return _stream_file_with_range(full, request, get_mime_type(full.name), "no-cache")
 
 
+@router.delete("/api/workspace/files/{file_path:path}")
+def workspace_delete(file_path: str, sessionId: str | None = Query(default=None)) -> dict:
+    workspace = resolve_workspace_context(sessionId)
+    if sessionId and not workspace:
+        raise HTTPException(status_code=404, detail="Session not found")
+    assert workspace is not None
+    full = resolve_workspace_entry_path(workspace.workspace_path, file_path)
+    if not full:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if not full.exists() or not full.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    rel = str(full.relative_to(workspace.workspace_path))
+    if not (rel.startswith("input/") or rel.startswith("output/")):
+        raise HTTPException(status_code=400, detail="Only input/output files can be deleted")
+    stem = full.stem
+    full.unlink()
+    for ext in (".mp4", ".m4a", ".mp3", ".wav"):
+        p = workspace.workspace_path / ".normalized" / f"{stem}_norm{ext}"
+        if p.exists() and p.is_file():
+            p.unlink()
+    meta = workspace.workspace_path / ".meta" / f"{stem}.json"
+    if meta.exists() and meta.is_file():
+        meta.unlink()
+    return {"status": "ok", "deleted": rel}
+
+
 @router.get("/api/workspace/proxy/{file_path:path}")
 def workspace_proxy(file_path: str, request: Request, sessionId: str | None = Query(default=None)):
     workspace = resolve_workspace_context(sessionId)

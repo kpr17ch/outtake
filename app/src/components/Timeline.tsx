@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 // ─── Types matching Person 3's domain model ───
 
@@ -20,6 +20,12 @@ export interface TimelineTrack {
   muted?: boolean;
 }
 
+export interface MediaOption {
+  path: string;
+  name: string;
+  kind: "video" | "audio";
+}
+
 export interface Marker {
   inTime: number | null;
   outTime: number | null;
@@ -37,6 +43,12 @@ interface TimelineProps {
   onSetIn: () => void;
   onSetOut: () => void;
   onClearMarkers: () => void;
+  onAddTrack?: (type: "video" | "audio") => void;
+  onDeleteTrack?: (trackId: string) => void;
+  onToggleTrackMute?: (trackId: string) => void;
+  onToggleTrackSolo?: (trackId: string) => void;
+  availableMedia?: MediaOption[];
+  onAddClipAtTime?: (trackId: string, media: MediaOption, atTime: number) => void;
 }
 
 /** Format as MM:SS:FF (frame-based timecode) */
@@ -67,8 +79,15 @@ export default function Timeline({
   onSetIn,
   onSetOut,
   onClearMarkers,
+  onAddTrack,
+  onDeleteTrack,
+  onToggleTrackMute,
+  onToggleTrackSolo,
+  availableMedia,
+  onAddClipAtTime,
 }: TimelineProps) {
   const trackAreaRef = useRef<HTMLDivElement>(null);
+  const [pickerValue, setPickerValue] = useState<Record<string, string>>({});
 
   const pct = useMemo(() => (duration > 0 ? (currentTime / duration) * 100 : 0), [currentTime, duration]);
   const inPct = useMemo(() => (markers.inTime !== null && duration > 0 ? (markers.inTime / duration) * 100 : null), [markers.inTime, duration]);
@@ -82,6 +101,12 @@ export default function Timeline({
     },
     [duration, onSeek]
   );
+
+  const getAtTimeFromDragEvent = (e: React.DragEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return x * duration;
+  };
 
   // Timecode ticks
   const ticks = useMemo(() => {
@@ -97,7 +122,7 @@ export default function Timeline({
   const selectionInfo = useMemo(() => {
     if (markers.inTime === null || markers.outTime === null) return null;
     return `${fmt(markers.inTime, fps)} → ${fmt(markers.outTime, fps)} (${(markers.outTime - markers.inTime).toFixed(1)}s)`;
-  }, [markers]);
+  }, [markers, fps]);
 
   const TRACK_COLORS: Record<string, { bg: string; border: string; text: string }> = {
     video: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", text: "var(--accent)" },
@@ -120,6 +145,8 @@ export default function Timeline({
         </button>
         <span className="text-[11px] font-mono" style={{ color: "var(--text-secondary)" }}>{fmt(currentTime, fps)} / {fmt(duration, fps)}</span>
         <div className="flex-1" />
+        <button type="button" onClick={() => onAddTrack?.("video")} className="text-[10px] px-2 py-0.5 rounded border cursor-pointer" style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}>+V</button>
+        <button type="button" onClick={() => onAddTrack?.("audio")} className="text-[10px] px-2 py-0.5 rounded border cursor-pointer" style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}>+A</button>
         <button type="button" onClick={onSetIn} className="text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer" style={{
           background: markers.inTime !== null ? "var(--accent-surface)" : "var(--bg-elevated)",
           color: markers.inTime !== null ? "var(--accent)" : "var(--text-tertiary)",
@@ -146,12 +173,83 @@ export default function Timeline({
       <div ref={trackAreaRef} className="px-4 mt-1 mb-2">
         {tracks.map((track) => {
           const colors = TRACK_COLORS[track.type] || TRACK_COLORS.video;
+          const mediaOptions = (availableMedia || []).filter((m) => m.kind === track.type);
           return (
             <div key={track.id} className="flex items-center gap-2 mb-1">
               <span className="text-[10px] font-mono w-6 shrink-0 text-right" style={{ color: "var(--text-tertiary)" }}>{track.label}</span>
+              <button
+                type="button"
+                onClick={() => onToggleTrackMute?.(track.id)}
+                className="text-[9px] px-1 rounded border cursor-pointer"
+                style={{ borderColor: "var(--border-subtle)", color: track.muted ? "var(--accent)" : "var(--text-tertiary)" }}
+                title="Mute track"
+              >
+                M
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleTrackSolo?.(track.id)}
+                className="text-[9px] px-1 rounded border cursor-pointer"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-tertiary)" }}
+                title="Solo track"
+              >
+                S
+              </button>
+              <button
+                type="button"
+                onClick={() => onDeleteTrack?.(track.id)}
+                className="text-[9px] px-1 rounded border cursor-pointer"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-tertiary)" }}
+                title="Delete track"
+              >
+                -
+              </button>
+              <select
+                value={pickerValue[track.id] ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPickerValue((prev) => ({ ...prev, [track.id]: "" }));
+                  if (!value) return;
+                  const selected = mediaOptions.find((m) => m.path === value);
+                  if (!selected) return;
+                  onAddClipAtTime?.(track.id, selected, currentTime);
+                }}
+                className="text-[10px] px-1.5 py-0.5 rounded border bg-transparent"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                title="Add clip to track at playhead"
+              >
+                <option value="">Add…</option>
+                {mediaOptions.map((m) => (
+                  <option key={m.path} value={m.path}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
               <div
                 className="relative flex-1 h-7 rounded cursor-pointer"
                 style={{ background: "var(--bg-elevated)" }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = "copy";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const raw =
+                    e.dataTransfer.getData("application/x-outtake-media") ||
+                    e.dataTransfer.getData("application/json");
+                  if (!raw) return;
+                  try {
+                    const parsed = JSON.parse(raw) as { path: string; name: string; kind?: string };
+                    const kind = (parsed.kind || "") as "video" | "audio";
+                    if (!parsed.path || !kind || kind !== track.type) return;
+                    const media: MediaOption = { path: parsed.path, name: parsed.name || "Media", kind };
+                    onAddClipAtTime?.(track.id, media, getAtTimeFromDragEvent(e));
+                  } catch {
+                    // ignore
+                  }
+                }}
                 onClick={handleTrackClick}
               >
                 {/* Clip blocks */}

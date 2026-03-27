@@ -117,3 +117,33 @@ export async function GET(
     },
   });
 }
+
+export async function DELETE(
+  request: Request,
+  ctx: { params: Promise<{ path: string[] }> }
+) {
+  const { path: segments } = await ctx.params;
+  const relativePath = segments.join("/");
+  const url = new URL(request.url);
+  const sessionId = url.searchParams.get("sessionId");
+  const workspace = await resolveWorkspaceContext(sessionId);
+
+  if (sessionId && !workspace) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const fullPath = resolveWorkspaceEntryPath(workspace!.workspacePath, relativePath);
+  if (!fullPath) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  if (!(relativePath.startsWith("input/") || relativePath.startsWith("output/"))) {
+    return new Response("Only input/output files can be deleted", { status: 400 });
+  }
+  try {
+    const fs = await import("fs/promises");
+    await fs.unlink(fullPath);
+    return Response.json({ status: "ok", deleted: relativePath });
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
+}
